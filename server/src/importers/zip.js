@@ -6,7 +6,9 @@ import { inflateRawSync } from 'node:zlib';
 const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
-const MAX_ENTRY = 200 * 1024 * 1024;
+const MAX_ENTRY = 32 * 1024 * 1024;
+// A small archive can inflate to gigabytes; stop long before that.
+const MAX_TOTAL = 128 * 1024 * 1024;
 
 export function isZip(buf) {
   return buf.length > 4 && buf.readUInt32LE(0) === LOCAL;
@@ -25,6 +27,7 @@ export function readZip(buf) {
   const count = buf.readUInt16LE(eocd + 10);
   let p = buf.readUInt32LE(eocd + 16);
   const out = [];
+  let total = 0;
   for (let n = 0; n < count; n++) {
     if (buf.readUInt32LE(p) !== CENTRAL) throw new Error('Damaged zip file');
     const method = buf.readUInt16LE(p + 10);
@@ -39,6 +42,8 @@ export function readZip(buf) {
 
     if (name.endsWith('/')) continue;
     if (size > MAX_ENTRY) throw new Error(`${name} is too large`);
+    total += size;
+    if (total > MAX_TOTAL) throw new Error('That archive unpacks to too much data');
     if (buf.readUInt32LE(localAt) !== LOCAL) throw new Error('Damaged zip file');
     const start = localAt + 30 + buf.readUInt16LE(localAt + 26) + buf.readUInt16LE(localAt + 28);
     const raw = buf.subarray(start, start + compressed);

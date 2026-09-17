@@ -85,6 +85,8 @@ function createWindow({ show = true, route = '/' } = {}) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      // The preload only forwards IPC, so the renderer can stay sandboxed.
+      sandbox: true,
       preload: path.join(__dirname, 'preload.js'),
     },
   });

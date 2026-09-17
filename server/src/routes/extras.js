@@ -16,7 +16,9 @@ import { traktStatus, setTraktApp, startDeviceLogin, disconnectTrakt, syncTrakt 
 import { exportBackup, importBackup } from '../backup.js';
 
 const router = Router();
-const memory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 300 * 1024 * 1024, files: 20 } });
+// Uploads are read into memory, so keep them small: a TV Time export and a
+// Shelf backup are both a few MB.
+const memory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 64 * 1024 * 1024, files: 5 } });
 
 const handle = (fn) => async (req, res) => {
   try {

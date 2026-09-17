@@ -39,6 +39,29 @@ export function localOnly(req, res, next) {
   next();
 }
 
+// Everything the page needs comes from this server; nothing may be loaded from
+// or sent to anywhere else, and the page may not be framed.
+const CSP = [
+  "default-src 'self'",
+  "img-src 'self' data:",
+  "style-src 'self' 'unsafe-inline'",
+  "script-src 'self'",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "media-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+export function securityHeaders(_req, res, next) {
+  res.setHeader('Content-Security-Policy', CSP);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  next();
+}
+
 /** Build the app without listening, so Electron can host it on any port. */
 export function createApp() {
   ensureDirs();
@@ -48,6 +71,7 @@ export function createApp() {
   // No CORS headers (the UI is same-origin), and the Host/Origin checks stop a
   // web page from reaching the API through DNS rebinding or a cross-site POST.
   app.use(localOnly);
+  app.use(securityHeaders);
   app.use(express.json({ limit: '2mb' }));
 
   app.use('/uploads', express.static(UPLOADS_DIR, {
@@ -76,6 +100,13 @@ export function createApp() {
   }
 
   app.use((err, _req, res, _next) => {
+    // Multer rejects oversized uploads before the route sees them.
+    if (err?.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'That file is too large (64 MB at most)' });
+    }
+    if (err?.code === 'LIMIT_FILE_COUNT' || err?.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(413).json({ error: 'Too many files at once (5 at most)' });
+    }
     console.error(err);
     res.status(500).json({ error: String(err?.message || err) });
   });
