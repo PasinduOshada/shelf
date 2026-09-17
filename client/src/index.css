@@ -1,0 +1,281 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------
+   Cinematic. Warm bulb on a dark auditorium.
+
+   Every colour lives as an "R G B" triplet so Tailwind can express
+   translucency through the same token: rgb(var(--accent) / 0.15).
+   themes.js overwrites these at runtime; the values here are the
+   Projection preset, so the first paint is correct before JS runs.
+   ------------------------------------------------------------------ */
+:root {
+  --bg: 8 9 12;
+  --surface: 18 20 26;
+  --surface2: 26 30 38;
+  --edge: 31 36 48;
+  --text: 242 243 247;
+  --dim: 140 147 164;
+  --accent: 232 180 74;
+  --accent-ink: 20 16 10;
+  --radius: 6px;
+
+  /* Status colours. Not part of the theme builder: they key off light/dark
+     so a custom theme can never make a warning unreadable. */
+  --warn: 251 191 36;
+  --warn-ink: 252 211 77;
+  --danger: 251 113 133;
+  --good: 52 211 153;
+
+  --font-display: 'Archivo Variable', 'Archivo', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans Variable', 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', monospace;
+
+  color-scheme: dark;
+}
+
+/* Light-ground status colours: the dark-theme shades wash out on paper. */
+:root[data-theme='light'] {
+  --warn: 180 83 9;
+  --warn-ink: 146 64 14;
+  --danger: 190 18 60;
+  --good: 4 120 87;
+}
+
+@theme inline {
+  --color-bg: rgb(var(--bg));
+  --color-surface: rgb(var(--surface));
+  --color-surface-2: rgb(var(--surface2));
+  --color-edge: rgb(var(--edge));
+  --color-ink: rgb(var(--text));
+  --color-ink-dim: rgb(var(--dim));
+  --color-accent: rgb(var(--accent));
+  --color-accent-ink: rgb(var(--accent-ink));
+  --color-warn: rgb(var(--warn));
+  --color-warn-ink: rgb(var(--warn-ink));
+  --color-danger: rgb(var(--danger));
+  --color-good: rgb(var(--good));
+
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
+  --font-mono: var(--font-mono);
+
+  --radius-card: var(--radius);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display face carries the cinematic weight: tight, heavy, uppercase. */
+.display {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- focus -------------------------------------------------------- */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---- scrollbars --------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--edge));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--accent) / 0.55);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ------------------------------------------------------------------
+   Poster fallback.
+
+   Most of this library has no artwork yet, so the placeholder has to
+   read as a designed object rather than a missing image: a deterministic
+   two-tone gradient, a ghosted monogram, film grain and a vignette.
+   ------------------------------------------------------------------ */
+.poster-fallback {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.poster-fallback::before {
+  /* grain -- one inline turbulence, no network request */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.poster-fallback::after {
+  /* vignette, so the edges sit back and the title reads */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 18%, transparent 35%, rgb(0 0 0 / 0.55) 100%);
+}
+
+/* Sized in container units so the monogram scales with the poster, from a
+   44px thumbnail to a 176px hero, instead of one fixed rem size. */
+.poster-fallback {
+  container-type: inline-size;
+}
+
+.poster-monogram {
+  position: absolute;
+  z-index: 0;
+  top: -0.2em;
+  right: -0.04em;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 88cqi;
+  line-height: 1;
+  letter-spacing: -0.06em;
+  color: rgb(255 255 255 / 0.08);
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Thumbnails are too small for a readable title: show only the monogram. */
+@container (max-width: 96px) {
+  .poster-title {
+    display: none;
+  }
+  .poster-monogram {
+    inset: 0;
+    display: grid;
+    place-items: center;
+    font-size: 62cqi;
+    color: rgb(255 255 255 / 0.34);
+    letter-spacing: -0.03em;
+  }
+}
+
+/* ---- motion ------------------------------------------------------- */
+/* Movement only, never opacity: if the animation is paused or never runs
+   (hidden windows, throttled tabs), cards must still be visible at rest. */
+@keyframes rise {
+  from {
+    transform: translateY(8px) scale(0.985);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--surface2));
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(var(--edge) / 0.7), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Page gutter. One token for the side padding, so full-bleed heroes
+   and scrollers can cancel it exactly at every width.
+   ------------------------------------------------------------------ */
+:root {
+  --gutter: 16px;
+}
+@media (min-width: 640px) {
+  :root {
+    --gutter: 24px;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --gutter: 36px;
+  }
+}
+.gutter-x {
+  padding-inline: var(--gutter);
+}
+.bleed {
+  margin-inline: calc(var(--gutter) * -1);
+}
+
+/* Long poster walls: skip layout and paint for rows far off screen. */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 260px;
+}
+
+/* Figure strips: two per row on phones, one row from small screens up. */
+@media (min-width: 640px) {
+  .figure-strip {
+    grid-template-columns: var(--figures);
+  }
+}

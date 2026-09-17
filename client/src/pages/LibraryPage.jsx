@@ -1,0 +1,300 @@
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { api, formatBytes, tmdbImg, posterUrl } from '../api';
+import { Poster, Badge, ProgressBar, EmptyState } from '../components/Bits';
+import { titleHue, primaryBtn, ghostBtn } from '../components/DetailHero';
+import { PlayButton } from '../components/MediaActions';
+
+const SORTS = [
+  { id: 'title', label: 'A–Z' },
+  { id: 'recent', label: 'Recent' },
+  { id: 'missing', label: 'Missing' },
+  { id: 'size', label: 'Largest' },
+];
+
+/* ---- hero ---------------------------------------------------------- */
+
+function Hero({ item, onWatched, busy }) {
+  const backdrop = tmdbImg(item.backdrop_path, 'w1280');
+  const art = posterUrl(item.poster, 'w780');
+  const h = titleHue(item.title);
+
+  return (
+    <section className="relative bleed -mt-8 mb-10 overflow-hidden">
+      {backdrop || art ? (
+        <img
+          src={backdrop || art}
+          alt=""
+          className="absolute inset-0 h-full w-full scale-105 object-cover object-top opacity-55 blur-[1px]"
+        />
+      ) : (
+        // No artwork yet: light the band in the title's own hue, like a
+        // projector spilling colour, so the opening is never a black slab.
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `radial-gradient(70% 150% at 80% 0%, hsl(${h} 52% 30% / 0.95), transparent 62%),
+              radial-gradient(55% 120% at 0% 100%, rgb(var(--accent) / 0.16), transparent 60%),
+              linear-gradient(120deg, hsl(${(h + 28) % 360} 30% 12%), rgb(var(--bg)) 82%)`,
+          }}
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/55 to-bg/5" />
+      <div className="absolute inset-0 bg-gradient-to-r from-bg/90 via-bg/40 to-transparent" />
+
+      <div className="relative grid items-end gap-10 gutter-x pb-9 pt-20 lg:grid-cols-[minmax(0,1fr)_196px]">
+        <div className="min-w-0">
+          <div className="mono mb-2.5 text-[10px] uppercase tracking-[0.22em] text-accent">
+            Continue watching
+          </div>
+          <h1 className="display max-w-2xl text-[clamp(34px,5vw,64px)] uppercase leading-[0.9] text-ink">
+            {item.title}
+          </h1>
+          <div className="mono mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-dim">
+            <span className="text-ink">
+              S{item.season_number}E{item.episode_number}
+            </span>
+            {item.episode_title && <span className="max-w-sm truncate">{item.episode_title}</span>}
+            <span>·</span>
+            <span>
+              {item.watched_count}/{item.owned_count} watched
+            </span>
+          </div>
+          <div className="mt-5 flex flex-wrap items-center gap-2.5">
+            <PlayButton target={{ episodeId: item.episode_id }} label={`${item.title} S${item.season_number}E${item.episode_number}`}>
+              Play S{item.season_number}E{item.episode_number}
+            </PlayButton>
+            <button onClick={onWatched} disabled={busy} className={ghostBtn}>
+              Mark watched
+            </button>
+            <Link to={`/show/${item.show_id}`} className={ghostBtn}>
+              Open show
+            </Link>
+          </div>
+          <div className="mt-6 max-w-sm">
+            <ProgressBar value={item.progress} />
+          </div>
+        </div>
+
+        <Link
+          to={`/show/${item.show_id}`}
+          className="group hidden justify-self-end lg:block lg:w-[196px]"
+          aria-label={`Open ${item.title}`}
+        >
+          <Poster
+            poster={item.poster}
+            title={item.title}
+            emoji={item.icon_emoji}
+            size="w342"
+            className="rotate-[1.5deg] shadow-[0_30px_70px_-20px_rgb(0_0_0/0.9)] ring-1 ring-white/10 transition-transform duration-500 group-hover:rotate-0"
+          />
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+/* ---- cards --------------------------------------------------------- */
+
+function ShowCard({ show }) {
+  return (
+    <Link to={`/show/${show.id}`} className="group block rise cv-auto">
+      <Poster poster={show.poster} title={show.title} emoji={show.icon_emoji}>
+        <div className="absolute inset-0 z-[3] bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        {show.missing_episodes > 0 && (
+          <div className="absolute right-1.5 top-1.5 z-[3]">
+            <Badge tone="glass" title={`${show.missing_episodes} episodes missing`}>
+              −{show.missing_episodes}
+            </Badge>
+          </div>
+        )}
+        {show.is_favorite ? (
+          <div className="absolute left-1.5 top-1.5 z-[3] text-[13px] text-accent drop-shadow">★</div>
+        ) : null}
+        {show.owned_episodes > 0 && show.progress > 0 && (
+          <div className="absolute inset-x-2 bottom-2 z-[3]">
+            <ProgressBar value={show.progress} onArt />
+          </div>
+        )}
+      </Poster>
+      <div className="mt-2 truncate text-[12.5px] font-medium text-ink transition-colors group-hover:text-accent">
+        {show.title}
+      </div>
+      <div className="mono truncate text-[10px] text-ink-dim">
+        {show.owned_episodes} eps · {formatBytes(show.size_bytes)}
+      </div>
+    </Link>
+  );
+}
+
+function MovieCard({ movie }) {
+  return (
+    <Link to={`/movie/${movie.id}`} className="group block rise cv-auto">
+      <Poster poster={movie.poster} title={movie.title} emoji={movie.icon_emoji}>
+        <div className="absolute inset-0 z-[3] bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        {movie.watched ? (
+          <div className="absolute right-1.5 top-1.5 z-[3] grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] text-accent-ink">
+            ✓
+          </div>
+        ) : null}
+        {movie.quality ? (
+          // Top-left: the bottom edge is where a generated poster prints its title.
+          <div className="absolute left-1.5 top-1.5 z-[3]">
+            <Badge tone="glass">{movie.quality}</Badge>
+          </div>
+        ) : null}
+      </Poster>
+      <div className="mt-2 truncate text-[12.5px] font-medium text-ink transition-colors group-hover:text-accent">
+        {movie.title}
+      </div>
+      <div className="mono truncate text-[10px] text-ink-dim">
+        {movie.year || '—'}
+        {movie.collection_name ? ` · ${movie.collection_name}` : ''}
+      </div>
+    </Link>
+  );
+}
+
+/* ---- page ---------------------------------------------------------- */
+
+export default function LibraryPage() {
+  const [params, setParams] = useSearchParams();
+  const tab = params.get('tab') || 'shows';
+  const search = params.get('search') || '';
+  const sort = params.get('sort') || 'title';
+
+  const [shows, setShows] = useState(null);
+  const [movies, setMovies] = useState(null);
+  const [hero, setHero] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const [s, m, queue] = await Promise.all([
+        api.shows({ search, sort }),
+        api.movies({ search, sort }),
+        api.continueWatching(1),
+      ]);
+      setShows(s);
+      setMovies(m);
+      setHero(queue?.[0] || null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    const onRefresh = () => load();
+    window.addEventListener('shelf:refresh', onRefresh);
+    return () => window.removeEventListener('shelf:refresh', onRefresh);
+  }, [search, sort]);
+
+  async function markHeroWatched() {
+    if (!hero) return;
+    setBusy(true);
+    try {
+      await api.watchEpisode(hero.episode_id, true);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function setParam(key, value) {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setParams(next);
+  }
+
+  const items = tab === 'shows' ? shows : movies;
+  const totalBytes = (items || []).reduce((sum, x) => sum + (x.size_bytes || 0), 0);
+
+  return (
+    <div>
+      {hero && !search && <Hero item={hero} onWatched={markHeroWatched} busy={busy} />}
+
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-6" role="tablist" aria-label="Library">
+          {['shows', 'movies'].map((id) => (
+            <button
+              key={id}
+              role="tab"
+              aria-selected={tab === id}
+              onClick={() => setParam('tab', id === 'shows' ? null : id)}
+              className={`display relative border-b-2 pb-1.5 text-sm uppercase tracking-[0.12em] transition-colors ${
+                tab === id ? 'border-accent text-ink' : 'border-transparent text-ink-dim hover:text-ink'
+              }`}
+            >
+              {id}
+              <span className="mono ml-2 text-[10px] tracking-normal opacity-60">
+                {id === 'shows' ? shows?.length ?? '' : movies?.length ?? ''}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-4">
+          <span className="mono text-[11px] text-ink-dim">{formatBytes(totalBytes)}</span>
+          <div className="flex items-center gap-1">
+            {SORTS.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setParam('sort', s.id === 'title' ? null : s.id)}
+                className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition ${
+                  sort === s.id
+                    ? 'bg-accent/12 text-accent'
+                    : 'text-ink-dim hover:bg-surface hover:text-ink'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {search && (
+        <div className="mb-5 flex items-center gap-2 text-[13px] text-ink-dim">
+          Results for <span className="font-medium text-ink">“{search}”</span>
+          <button onClick={() => setParam('search', null)} className="text-accent hover:underline">
+            clear
+          </button>
+        </div>
+      )}
+
+      {loading && !items ? (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-4 gap-y-6">
+          {Array.from({ length: 18 }).map((_, i) => (
+            <div key={i} className="space-y-2">
+              <div className="skeleton aspect-[2/3] rounded-card" />
+              <div className="skeleton h-3 w-3/4 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : !items?.length ? (
+        <EmptyState
+          icon={tab === 'shows' ? '📺' : '🎞'}
+          title={search ? 'Nothing matched' : `No ${tab} indexed`}
+          hint={search ? 'Try a different title.' : 'Add a library folder in Settings, then run a scan.'}
+          action={
+            !search && (
+              <Link to="/settings" className={primaryBtn}>
+                Open Settings
+              </Link>
+            )
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-4 gap-y-6">
+          {tab === 'shows'
+            ? shows.map((s) => <ShowCard key={s.id} show={s} />)
+            : movies.map((m) => <MovieCard key={m.id} movie={m} />)}
+        </div>
+      )}
+    </div>
+  );
+}
