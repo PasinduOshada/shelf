@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api, formatBytes, countdown, formatClock, episodeLabel, plural } from '../api';
 import { Badge, Spinner, StatusPicker } from '../components/Bits';
 import DetailHero, { FigureStrip, ghostBtn, quietBtn } from '../components/DetailHero';
@@ -42,9 +42,9 @@ function EpisodeRow({ episode, onToggle, busy, onSubtitles, expanded, onExpand, 
     >
       <button
         onClick={() => onToggle(episode)}
-        disabled={!episode.owned || busy}
+        disabled={busy}
         aria-label={episode.watched ? 'Mark unwatched' : 'Mark watched'}
-        title={episode.owned ? 'Toggle watched' : 'Not on disk'}
+        title={episode.owned ? 'Toggle watched' : 'Toggle watched (not on disk)'}
         className={`grid h-[18px] w-[18px] place-items-center rounded-[4px] border text-[10px] font-bold transition ${
           episode.watched
             ? 'border-accent bg-accent text-accent-ink'
@@ -115,6 +115,7 @@ function EpisodeRow({ episode, onToggle, busy, onSubtitles, expanded, onExpand, 
 
 export default function ShowPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [show, setShow] = useState(null);
   const [openSeason, setOpenSeason] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -175,11 +176,14 @@ export default function ShowPage() {
     const seasons = [...show.seasons].sort(
       (a, b) => (a.season_number === 0) - (b.season_number === 0) || a.season_number - b.season_number
     );
-    for (const season of seasons) {
-      const ep = season.episodes.find((e) => e.owned && !e.watched);
-      if (ep) return ep;
-    }
-    return null;
+    const episodes = seasons.flatMap((season) => season.episodes);
+    // What you can play beats what you can only tick off, which is all a
+    // title you are following has.
+    return (
+      episodes.find((e) => e.owned && !e.watched) ||
+      episodes.find((e) => !e.watched && !e.upcoming) ||
+      null
+    );
   }, [show]);
 
   // Keyboard: p plays the next episode, w marks it watched.
@@ -315,14 +319,16 @@ export default function ShowPage() {
           <>
             {nextUp ? (
               <>
-                <PlayButton target={{ fileId: nextUp.file_id }} label={`${show.title} ${epCode(nextUp)}`}>
-                  Play {epCode(nextUp)}
-                </PlayButton>
+                {nextUp.owned && (
+                  <PlayButton target={{ fileId: nextUp.file_id }} label={`${show.title} ${epCode(nextUp)}`}>
+                    Play {epCode(nextUp)}
+                  </PlayButton>
+                )}
                 <button className={ghostBtn} disabled={busy} onClick={() => toggleEpisode(nextUp)}>
-                  Mark watched
+                  {nextUp.owned ? 'Mark watched' : `Mark ${epCode(nextUp)} watched`}
                 </button>
               </>
-            ) : show.stats.owned > 0 ? (
+            ) : show.stats.total > 0 ? (
               <span className="display rounded border border-accent/40 px-4 py-2 text-[12.5px] uppercase tracking-wide text-accent">
                 All caught up
               </span>
@@ -343,6 +349,18 @@ export default function ShowPage() {
             <button onClick={() => setDialog('rename')} className={quietBtn}>
               Rename
             </button>
+            {show.stats.owned === 0 && (
+              <button
+                onClick={async () => {
+                  if (!confirm(`Stop following ${show.title}? What you ticked off is forgotten too.`)) return;
+                  await api.removeTracked('show', show.id);
+                  navigate('/');
+                }}
+                className={quietBtn}
+              >
+                Stop tracking
+              </button>
+            )}
             <button onClick={() => fileRef.current?.click()} className={quietBtn}>
               Upload poster
             </button>

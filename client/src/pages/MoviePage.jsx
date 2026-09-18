@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api, formatBytes, formatRuntime, formatClock } from '../api';
 import { Poster, Badge, Spinner, RatingStars, StatusPicker } from '../components/Bits';
 import { MediaFacts } from '../components/EpisodePanel';
@@ -10,6 +10,7 @@ import { PlayButton, RowActions, SubtitleDialog, toast, playTarget } from '../co
 
 export default function MoviePage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [movie, setMovie] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState(null); // 'match' | 'rename' | null
@@ -175,6 +176,18 @@ export default function MoviePage() {
             <button onClick={() => setDialog('rename')} className={quietBtn}>
               Rename
             </button>
+            {movie.files.length === 0 && (
+              <button
+                onClick={async () => {
+                  if (!confirm(`Stop following ${movie.title}? What you recorded is forgotten too.`)) return;
+                  await api.removeTracked('movie', movie.id);
+                  navigate('/');
+                }}
+                className={quietBtn}
+              >
+                Stop tracking
+              </button>
+            )}
             <button onClick={() => fileRef.current?.click()} className={quietBtn}>
               Upload poster
             </button>

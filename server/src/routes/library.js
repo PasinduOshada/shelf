@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { startProbe } from '../mediainfo.js';
 import { setSecret, secretsEncrypted } from '../secrets.js';
+import { addTracked, removeTracked } from '../tracked.js';
 import multer from 'multer';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -304,6 +305,26 @@ router.post('/movies/:id/match', async (req, res) => {
     res.json(q.getMovie(req.params.id));
   } catch (err) {
     res.status(502).json({ error: String(err.message || err) });
+  }
+});
+
+// ---------------------------------------------------------------- tracking
+
+/** Follow something that is not on this computer, the way TV Time does. */
+router.post('/tracked', async (req, res) => {
+  const { kind, tmdbId, title, year } = req.body || {};
+  try {
+    res.status(201).json(await addTracked({ kind, tmdbId, title, year }));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: String(err.message || err) });
+  }
+});
+
+router.delete('/tracked/:kind/:id', (req, res) => {
+  try {
+    res.json(removeTracked(req.params.kind, req.params.id));
+  } catch (err) {
+    res.status(err.status || 400).json({ error: String(err.message || err) });
   }
 });
 

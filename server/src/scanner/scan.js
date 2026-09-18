@@ -133,8 +133,24 @@ function fileStat(p) {
 // ---------------------------------------------------------------- upserts
 
 function upsertShow({ libraryId, folderPath, folderName }) {
-  const existing = db.prepare('SELECT * FROM shows WHERE folder_path = ?').get(folderPath);
+  const { title, year } = parseFolderName(folderName);
+  const existing =
+    db.prepare('SELECT * FROM shows WHERE folder_path = ?').get(folderPath) ||
+    // A title you were only following, now downloaded: claim that row rather
+    // than starting a second one beside it.
+    db.prepare(
+      `SELECT * FROM shows
+       WHERE folder_path IS NULL AND library_id IS NULL AND sort_title = ?
+         -- A year only rules the match out when both sides state one.
+         AND (year IS NULL OR ?2 IS NULL OR year = ?2)`
+    ).get(sortTitle(title || folderName), year ?? null);
   if (existing) {
+    if (!existing.folder_path) {
+      db.prepare('UPDATE shows SET folder_path = ?, folder_name = ? WHERE id = ?')
+        .run(folderPath, folderName, existing.id);
+      existing.folder_path = folderPath;
+      existing.folder_name = folderName;
+    }
     // Heal a detached row: libraries.id is ON DELETE SET NULL, so removing and
     // re-adding a library orphans its shows until the next scan.
     if (existing.library_id !== libraryId) {
@@ -144,7 +160,6 @@ function upsertShow({ libraryId, folderPath, folderName }) {
     return existing;
   }
 
-  const { title, year } = parseFolderName(folderName);
   const id = randomUUID();
   db.prepare(
     `INSERT INTO shows (id, library_id, folder_path, folder_name, title, sort_title, year, tmdb_status)

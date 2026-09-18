@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, formatBytes, tmdbImg, posterUrl, episodeLabel, plural } from '../api';
+import AddTitleDialog from '../components/AddTitleDialog';
 import { Poster, Badge, ProgressBar, EmptyState } from '../components/Bits';
 import { titleHue, primaryBtn, ghostBtn } from '../components/DetailHero';
 import { PlayButton } from '../components/MediaActions';
@@ -133,7 +134,9 @@ function ShowCard({ show }) {
         {show.title}
       </div>
       <div className="mono truncate text-[10px] text-ink-dim">
-        {plural(show.owned_episodes, 'ep')} · {formatBytes(show.size_bytes)}
+        {show.owned_episodes > 0
+          ? `${plural(show.owned_episodes, 'ep')} · ${formatBytes(show.size_bytes)}`
+          : 'Tracking'}
       </div>
     </Link>
   );
@@ -162,6 +165,7 @@ function MovieCard({ movie }) {
       <div className="mono truncate text-[10px] text-ink-dim">
         {movie.year || '—'}
         {movie.collection_name ? ` · ${movie.collection_name}` : ''}
+        {movie.file_count === 0 ? ' · Tracking' : ''}
       </div>
     </Link>
   );
@@ -171,6 +175,7 @@ function MovieCard({ movie }) {
 
 export default function LibraryPage() {
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const tab = params.get('tab') || 'shows';
   const search = params.get('search') || '';
   const sort = params.get('sort') || 'title';
@@ -181,6 +186,8 @@ export default function LibraryPage() {
   const [hero, setHero] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [tmdbReady, setTmdbReady] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -197,6 +204,10 @@ export default function LibraryPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    api.settings().then((s) => setTmdbReady(Boolean(s.tmdbConfigured))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     load();
@@ -230,9 +241,20 @@ export default function LibraryPage() {
 
   return (
     <div>
+      {adding && (
+        <AddTitleDialog
+          tmdbReady={tmdbReady}
+          onClose={() => setAdding(false)}
+          onAdded={(added) => {
+            setAdding(false);
+            navigate(added.seasons ? `/show/${added.id}` : `/movie/${added.id}`);
+          }}
+        />
+      )}
       {hero && !search && <Hero item={hero} onWatched={markHeroWatched} busy={busy} />}
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-5">
         <div className="flex items-center gap-6" role="tablist" aria-label="Library">
           {['shows', 'movies'].map((id) => (
             <button
@@ -250,6 +272,13 @@ export default function LibraryPage() {
               </span>
             </button>
           ))}
+        </div>
+        <button
+          onClick={() => setAdding(true)}
+          className="rounded border border-edge px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-ink-dim transition hover:border-accent/50 hover:text-ink"
+        >
+          + Add watched
+        </button>
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">

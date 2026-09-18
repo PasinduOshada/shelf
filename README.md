@@ -110,6 +110,12 @@ Open <http://localhost:5180>.
 
 Then in **Settings**, add your library folders (one for TV, one for Movies) and hit **Scan**.
 
+Things you watched but do not have on this computer go in with **+ Add watched** on the
+Library. They join the library as titles with no files: tick off episodes, rate them, and
+they count in your statistics like anything else. Delete a download later and the record
+stays; download it again and the title you were already following picks the files up
+rather than appearing twice.
+
 A scan only picks up video files that look like an episode or a film. Subtitles are noted
 beside their video; documents, artwork, music and archives are ignored outright; and
 release samples, trailers and phone or camera exports (`VID_20240102…`, WhatsApp

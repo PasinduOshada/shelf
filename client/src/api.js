@@ -95,6 +95,8 @@ export const api = {
   setShowOrdering: (id, groupId) => req(`/shows/${id}/ordering`, { method: 'POST', body: { groupId } }),
 
   settings: () => req('/settings'),
+  addTracked: (body) => req('/tracked', { method: 'POST', body }),
+  removeTracked: (kind, id) => req(`/tracked/${kind}/${id}`, { method: 'DELETE' }),
   updateSettings: (body) => req('/settings', { method: 'PATCH', body }),
 
   // The organiser runs previews and moves as background jobs; poll organizeJob().

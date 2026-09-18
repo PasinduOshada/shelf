@@ -344,6 +344,11 @@ export function missingReport() {
       AND NOT EXISTS (
         SELECT 1 FROM files f WHERE f.episode_id = e.id AND f.is_missing = 0
       )
+      -- A title you only follow, or one whose files you deleted, is not a gap
+      -- in the library: you are not missing what you never kept.
+      AND EXISTS (
+        SELECT 1 FROM files f1 WHERE f1.show_id = s.id AND f1.is_missing = 0
+      )
     ORDER BY s.sort_title, e.season_number, e.episode_number
   `).all();
 
