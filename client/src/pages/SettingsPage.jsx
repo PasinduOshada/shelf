@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api';
+import { api, plural } from '../api';
 import { Badge, SectionTitle, Spinner, EmptyState, ProgressBar } from '../components/Bits';
 import { primaryBtn, ghostBtn } from '../components/DetailHero';
 import ThemePanel from '../components/ThemePanel';
@@ -60,7 +60,7 @@ export default function SettingsPage() {
         ? ` ${stats.skipped} clip${stats.skipped === 1 ? '' : 's'} left out.`
         : '';
       setMessage({
-        text: `Scanned ${stats.files} files — ${stats.shows} shows and ${stats.movies} films in ${stats.durationMs} ms.${skipped}`,
+        text: `Scanned ${plural(stats.files, 'file')} — ${plural(stats.shows, 'show')} and ${plural(stats.movies, 'film')} in ${stats.durationMs} ms.${skipped}`,
       });
       window.dispatchEvent(new CustomEvent('shelf:refresh'));
       await load();
@@ -229,7 +229,7 @@ export default function SettingsPage() {
               {tmdb?.configured ? <Badge tone="good">connected</Badge> : <Badge tone="warn">not connected</Badge>}
               {tmdb && (
                 <span className="mono text-[10.5px] text-ink-dim">
-                  {tmdb.unmatched.shows} shows · {tmdb.unmatched.movies} films without metadata
+                  {plural(tmdb.unmatched.shows, 'show')} · {plural(tmdb.unmatched.movies, 'film')} without metadata
                 </span>
               )}
             </div>
@@ -278,7 +278,7 @@ export default function SettingsPage() {
                 </div>
                 <ProgressBar value={job.total ? (job.done / job.total) * 100 : 0} />
                 <div className="mono mt-2 text-[10.5px] text-ink-dim">
-                  {job.shows} shows · {job.movies} films matched · {job.failed} not found
+                  {plural(job.shows, 'show')} · {plural(job.movies, 'film')} matched · {job.failed} not found
                 </div>
               </div>
             ) : (
@@ -287,7 +287,7 @@ export default function SettingsPage() {
                   <div className="mt-5 rounded border border-edge bg-bg/60 px-3.5 py-3 text-[12.5px] text-ink">
                     {job.mode === 'refresh'
                       ? `Refreshed ${job.shows} airing shows and ${job.movies} recent films.`
-                      : `Matched ${job.shows} shows and ${job.movies} films.`}
+                      : `Matched ${plural(job.shows, 'show')} and ${plural(job.movies, 'film')}.`}
                     {job.failed > 0 &&
                       (job.mode === 'refresh'
                         ? ` ${job.failed} couldn’t be refreshed this time; ${job.failed === 1 ? 'it keeps' : 'they keep'} the existing details and will retry automatically.`

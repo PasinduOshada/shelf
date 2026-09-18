@@ -196,3 +196,32 @@ export function RatingStars({ value, onChange, size = 'text-[18px]', label = 'Yo
     </div>
   );
 }
+
+/** Where a title stands with you: planned, watching, paused, done, dropped. */
+export const WATCH_STATUSES = [
+  { id: 'watching', label: 'Watching' },
+  { id: 'planned', label: 'Planned' },
+  { id: 'paused', label: 'Paused' },
+  { id: 'completed', label: 'Done' },
+  { id: 'dropped', label: 'Dropped' },
+];
+
+export function StatusPicker({ value, onChange, label = 'Watch status' }) {
+  const set = WATCH_STATUSES.some((s) => s.id === value);
+  return (
+    <select
+      value={set ? value : ''}
+      onChange={(e) => onChange(e.target.value || null)}
+      aria-label={label}
+      title={label}
+      className={`h-8 rounded border bg-surface/70 px-2 text-[11px] uppercase tracking-wider outline-none transition ${
+        set ? 'border-accent/60 text-accent' : 'border-edge text-ink-dim hover:text-ink'
+      }`}
+    >
+      <option value="">Set status</option>
+      {WATCH_STATUSES.map((s) => (
+        <option key={s.id} value={s.id}>{s.label}</option>
+      ))}
+    </select>
+  );
+}

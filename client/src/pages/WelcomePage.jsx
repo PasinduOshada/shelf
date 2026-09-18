@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api, plural } from '../api';
 import { Badge, ProgressBar, Spinner } from '../components/Bits';
 import { primaryBtn, ghostBtn } from '../components/DetailHero';
 import FolderPicker from '../components/FolderPicker';
@@ -296,7 +296,7 @@ export default function WelcomePage() {
                 <div role="status" aria-live="polite">
                   {scan && (
                     <p className="mono text-[11px] text-ink-dim">
-                      Found {scan.shows} shows and {scan.movies} films · {scan.files} files
+                      Found {plural(scan.shows, 'show')} and {plural(scan.movies, 'film')} · {plural(scan.files, 'file')}
                     </p>
                   )}
                   <div className="mb-2 mt-3 flex items-center justify-between gap-3 text-[12.5px]">

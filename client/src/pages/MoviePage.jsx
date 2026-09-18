@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api, formatBytes, formatRuntime, formatClock } from '../api';
-import { Poster, Badge, Spinner, RatingStars } from '../components/Bits';
+import { Poster, Badge, Spinner, RatingStars, StatusPicker } from '../components/Bits';
 import { MediaFacts } from '../components/EpisodePanel';
 import DetailHero, { FigureStrip, primaryBtn, ghostBtn, quietBtn } from '../components/DetailHero';
 import MatchDialog from '../components/MatchDialog';
@@ -118,10 +118,15 @@ export default function MoviePage() {
           </>
         }
         titleAddon={
+          <div className="mt-1 flex items-center gap-1.5">
+          <StatusPicker
+            value={movie.user_status}
+            onChange={(user_status) => run(() => api.updateMovie(id, { user_status }))}
+          />
           <button
             onClick={() => run(() => api.updateMovie(id, { is_favorite: movie.is_favorite ? 0 : 1 }))}
             aria-label={movie.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
-            className={`mt-1 grid h-8 w-8 place-items-center rounded border text-base transition ${
+            className={`grid h-8 w-8 place-items-center rounded border text-base transition ${
               movie.is_favorite
                 ? 'border-accent/60 bg-accent/15 text-accent'
                 : 'border-edge bg-surface/70 text-ink-dim hover:text-accent'
@@ -129,6 +134,7 @@ export default function MoviePage() {
           >
             ★
           </button>
+          </div>
         }
         actions={
           <>

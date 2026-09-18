@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, formatBytes } from '../api';
+import { api, formatBytes, episodeLabel, plural } from '../api';
 import { Badge, Spinner, EmptyState } from '../components/Bits';
 import { FigureStrip, primaryBtn } from '../components/DetailHero';
 
@@ -91,7 +91,7 @@ function Summary({ title, now, before }) {
         <span className="display text-[15px] uppercase text-ink-dim">hours</span>
       </div>
       <div className="mono mt-2 text-[11px] text-ink-dim">
-        {now.episodes} episodes · {now.movies} films · {now.shows} shows
+        {plural(now.episodes, 'episode')} · {plural(now.movies, 'film')} · {plural(now.shows, 'show')}
       </div>
       {now.top?.length > 0 && (
         <div className="mt-5">
@@ -107,8 +107,80 @@ function Summary({ title, now, before }) {
   );
 }
 
+/** Hours per week or per month, so a habit shows up as a shape. */
+function Trend({ data, unit }) {
+  const max = Math.max(1, ...data.map((p) => p.minutes));
+  const fmt = (start) => {
+    const d = new Date(start + 'T12:00:00');
+    return unit === 'month'
+      ? d.toLocaleDateString(undefined, { month: 'short' })
+      : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  };
+  return (
+    <div>
+      <div className="flex items-end gap-1.5" style={{ height: 132 }}>
+        {data.map((p) => (
+          <div key={p.start} className="flex min-w-0 flex-1 flex-col justify-end" title={`${p.hours}h · ${plural(p.episodes, 'episode')} · ${plural(p.movies, 'film')}`}>
+            <div
+              className={`rounded-t ${p.minutes ? 'bg-accent/70' : 'bg-edge'}`}
+              style={{ height: `${p.minutes ? Math.max(4, (p.minutes / max) * 118) : 2}px` }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mono mt-2 flex justify-between text-[10px] text-ink-dim">
+        <span>{fmt(data[0]?.start || '')}</span>
+        <span className="text-ink">peak {(max / 60).toFixed(1)}h</span>
+        <span>{fmt(data[data.length - 1]?.start || '')}</span>
+      </div>
+    </div>
+  );
+}
+
+/** What you watched and when, newest first, grouped by day. */
+function Timeline({ rows }) {
+  if (!rows.length) return <p className="text-[13px] text-ink-dim">Nothing watched yet.</p>;
+  const days = [];
+  for (const r of rows) {
+    const day = String(r.watched_at).slice(0, 10);
+    if (!days.length || days[days.length - 1].day !== day) days.push({ day, items: [] });
+    days[days.length - 1].items.push(r);
+  }
+  const label = (d) => {
+    const date = new Date(d + 'T12:00:00');
+    const today = new Date().toISOString().slice(0, 10);
+    if (d === today) return 'Today';
+    return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  };
+  const title = (r) =>
+    r.kind === 'movie'
+      ? r.movie_title || 'Film'
+      : `${r.show_title || 'Show'} · ${episodeLabel(r.season_number, r.episode_number)}${r.episode_title ? ` — ${r.episode_title}` : ''}`;
+
+  return (
+    <div className="grid gap-4">
+      {days.map((d) => (
+        <div key={d.day} className="grid gap-1.5">
+          <div className="mono text-[10px] uppercase tracking-wider text-ink-dim">{label(d.day)}</div>
+          {d.items.map((r) => (
+            <div key={r.id} className="flex items-baseline justify-between gap-3 text-[13px]">
+              <span className="min-w-0 truncate text-ink">{title(r)}</span>
+              <span className="mono shrink-0 text-[10.5px] text-ink-dim">
+                {r.minutes ? `${r.minutes}m` : ''}
+                {r.is_rewatch ? ' · rewatch' : ''}
+              </span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function StatsPage() {
   const [data, setData] = useState(null);
+  const [unit, setUnit] = useState('week');
+  const [trend, setTrend] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -117,10 +189,15 @@ export default function StatsPage() {
       api.summaries(),
       api.streaks(),
       api.composition(),
-    ]).then(([overview, activity, summaries, streaks, composition]) =>
-      setData({ overview, activity, summaries, streaks, composition })
+      api.history(60),
+    ]).then(([overview, activity, summaries, streaks, composition, history]) =>
+      setData({ overview, activity, summaries, streaks, composition, history })
     );
   }, []);
+
+  useEffect(() => {
+    api.periods(unit, unit === 'month' ? 12 : 12).then(setTrend);
+  }, [unit]);
 
   if (!data) {
     return (
@@ -130,7 +207,7 @@ export default function StatsPage() {
     );
   }
 
-  const { overview, activity, summaries, streaks, composition } = data;
+  const { overview, activity, summaries, streaks, composition, history } = data;
   const noWatchData = overview.watched.minutes === 0;
 
   return (
@@ -152,7 +229,7 @@ export default function StatsPage() {
           </div>
         </div>
         <div className="mono text-right text-[11px] leading-relaxed text-ink-dim">
-          {overview.watched.episodes} episodes · {overview.watched.movies} films
+          {plural(overview.watched.episodes, 'episode')} · {plural(overview.watched.movies, 'film')}
           <br />
           {overview.missing_gaps ?? overview.missing_episodes} missing from seasons you’ve started
         </div>
@@ -187,6 +264,30 @@ export default function StatsPage() {
             <Summary title="This week" now={summaries.week} before={summaries.prev_week} />
             <Summary title="This month" now={summaries.month} before={summaries.prev_month} />
           </div>
+          <Panel
+            title={unit === 'month' ? 'Hours by month' : 'Hours by week'}
+            aside={
+              <div className="flex items-center gap-1">
+                {['week', 'month'].map((u) => (
+                  <button
+                    key={u}
+                    onClick={() => setUnit(u)}
+                    aria-pressed={unit === u}
+                    className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition ${
+                      unit === u ? 'bg-accent/12 text-accent' : 'text-ink-dim hover:bg-surface hover:text-ink'
+                    }`}
+                  >
+                    {u === 'week' ? 'Weekly' : 'Monthly'}
+                  </button>
+                ))}
+              </div>
+            }
+          >
+            {trend ? <Trend data={trend} unit={unit} /> : <Spinner />}
+          </Panel>
+          <Panel title="Recently watched">
+            <Timeline rows={history} />
+          </Panel>
         </div>
       )}
 

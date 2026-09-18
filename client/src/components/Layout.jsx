@@ -4,6 +4,7 @@ import { api, formatClock } from '../api';
 import { Spinner } from './Bits';
 import { applyTheme } from '../themes';
 import { Toaster } from './MediaActions';
+import CommandPalette from './CommandPalette';
 
 const NAV = [
   { to: '/', label: 'Library', end: true, key: 'l' },
@@ -16,6 +17,7 @@ const NAV = [
 ];
 
 const SHORTCUTS = [
+  ['Ctrl K', 'Jump to anything'],
   ['/', 'Search'],
   ['p', 'Play the next episode (on a show or film page)'],
   ['w', 'Mark the next episode watched (on a show or film page)'],
@@ -313,6 +315,7 @@ export default function Layout() {
         <Toaster />
       </div>
 
+      <CommandPalette />
       {help && <ShortcutHelp onClose={() => setHelp(false)} />}
     </div>
   );

@@ -28,6 +28,8 @@ addColumnIfMissing('shows', 'episode_group_name', 'TEXT');
 // When metadata was last pulled, so airing shows can be refreshed.
 addColumnIfMissing('shows', 'tmdb_refreshed_at', 'TEXT');
 addColumnIfMissing('movies', 'tmdb_refreshed_at', 'TEXT');
+// Planned / watching / paused / dropped, the same set shows use.
+addColumnIfMissing('movies', 'user_status', 'TEXT');
 // Where playback stopped (resume) and how long the file is.
 for (const table of ['episode_state', 'movie_state']) {
   addColumnIfMissing(table, 'progress_seconds', 'INTEGER');

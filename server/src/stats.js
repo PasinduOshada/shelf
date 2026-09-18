@@ -250,3 +250,50 @@ export function wrapped(year = new Date().getFullYear()) {
       .sort((a, b) => b.count - a.count).slice(0, 6),
   };
 }
+
+/**
+ * Watching by week or by month, newest period last, for a trend line rather
+ * than the this-versus-last-period figures `summaries()` gives.
+ * Weeks start on Monday, the way a week is usually read.
+ */
+export function periods(unit = 'week', count = 12) {
+  const n = Math.min(Math.max(Number(count) || 12, 1), 52);
+  const weekly = unit !== 'month';
+  const rows = db.prepare(`
+    SELECT ${weekly
+      ? "date(watched_at, 'weekday 0', '-6 days')"
+      : "strftime('%Y-%m-01', watched_at)"} AS start,
+      COUNT(*) AS items,
+      COALESCE(SUM(minutes), 0) AS minutes,
+      SUM(CASE WHEN kind = 'movie' THEN 1 ELSE 0 END) AS movies,
+      SUM(CASE WHEN kind = 'episode' THEN 1 ELSE 0 END) AS episodes,
+      COUNT(DISTINCT show_id) AS shows
+    FROM watch_history
+    GROUP BY start
+  `).all();
+
+  const byStart = new Map(rows.map((r) => [r.start, r]));
+  const out = [];
+  const cursor = new Date();
+  cursor.setHours(12, 0, 0, 0); // midday: no daylight-saving surprises
+  if (weekly) cursor.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
+  else cursor.setDate(1);
+
+  for (let i = 0; i < n; i++) {
+    const start = new Date(cursor);
+    if (weekly) start.setDate(start.getDate() - i * 7);
+    else start.setMonth(start.getMonth() - i);
+    const key = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    const hit = byStart.get(key);
+    out.unshift({
+      start: key,
+      items: hit?.items ?? 0,
+      minutes: hit?.minutes ?? 0,
+      hours: +((hit?.minutes ?? 0) / 60).toFixed(1),
+      movies: hit?.movies ?? 0,
+      episodes: hit?.episodes ?? 0,
+      shows: hit?.shows ?? 0,
+    });
+  }
+  return out;
+}

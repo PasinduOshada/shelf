@@ -4,6 +4,7 @@ import * as q from '../queries.js';
 import * as stats from '../stats.js';
 import * as watch from '../watch.js';
 import { hasApiKey } from '../tmdb.js';
+import { duplicateGroups } from '../duplicates.js';
 
 const router = Router();
 
@@ -21,8 +22,10 @@ router.get('/missing', (_req, res) => {
   res.json(q.missingReport());
 });
 
+// The same report /duplicates/groups serves: one answer to one question, and
+// it covers films, which the old episode-only query never did.
 router.get('/duplicates', (_req, res) => {
-  res.json(q.duplicates());
+  res.json(duplicateGroups());
 });
 
 /** Weighted random pick, optionally filtered. Powers "pick something for me". */
@@ -125,6 +128,8 @@ router.get('/stats/activity', (req, res) => res.json(stats.activity(Number(req.q
 router.get('/stats/summaries', (_req, res) => res.json(stats.summaries()));
 router.get('/stats/streaks', (_req, res) => res.json(stats.streaks()));
 router.get('/stats/composition', (_req, res) => res.json(stats.composition()));
+router.get('/stats/periods', (req, res) =>
+  res.json(stats.periods(req.query.unit === 'month' ? 'month' : 'week', Number(req.query.count) || 12)));
 router.get('/stats/wrapped', (req, res) => {
   res.json(stats.wrapped(Number(req.query.year) || new Date().getFullYear()));
 });

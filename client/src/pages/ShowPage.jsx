@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, formatBytes, countdown, formatClock } from '../api';
-import { Badge, Spinner } from '../components/Bits';
+import { api, formatBytes, countdown, formatClock, episodeLabel, plural } from '../api';
+import { Badge, Spinner, StatusPicker } from '../components/Bits';
 import DetailHero, { FigureStrip, ghostBtn, quietBtn } from '../components/DetailHero';
 import { PlayButton, RowActions, SubtitleDialog, toast, playTarget } from '../components/MediaActions';
 import EpisodePanel, { Renumber } from '../components/EpisodePanel';
@@ -17,7 +17,7 @@ const MISSING_HATCH = {
     'repeating-linear-gradient(135deg, transparent 0 7px, rgb(var(--edge) / 0.45) 7px 8px)',
 };
 
-const epCode = (e) => `S${String(e.season_number).padStart(2, '0')}E${String(e.episode_number).padStart(2, '0')}`;
+const epCode = (e) => episodeLabel(e.season_number, e.episode_number);
 
 function EpisodeRow({ episode, onToggle, busy, onSubtitles, expanded, onExpand, onChanged }) {
   // The server decides what counts as missing (specials and unscheduled
@@ -171,7 +171,11 @@ export default function ShowPage() {
 
   const nextUp = useMemo(() => {
     if (!show) return null;
-    for (const season of show.seasons) {
+    // Specials come last: they are watched around a series, not before it.
+    const seasons = [...show.seasons].sort(
+      (a, b) => (a.season_number === 0) - (b.season_number === 0) || a.season_number - b.season_number
+    );
+    for (const season of seasons) {
       const ep = season.episodes.find((e) => e.owned && !e.watched);
       if (ep) return ep;
     }
@@ -247,7 +251,7 @@ export default function ShowPage() {
             {show.year && <span className="text-ink">{show.year}</span>}
             <span>{show.seasons.length} {show.seasons.length === 1 ? 'season' : 'seasons'}</span>
             <span>·</span>
-            <span>{show.stats.total} episodes</span>
+            <span>{plural(show.stats.total, 'episode')}</span>
             {show.vote_average > 0 && (
               <>
                 <span>·</span>
@@ -258,6 +262,10 @@ export default function ShowPage() {
         }
         titleAddon={
           <div className="relative mt-1 flex items-center gap-1.5">
+            <StatusPicker
+              value={show.user_status}
+              onChange={(user_status) => patch({ user_status })}
+            />
             <button
               onClick={() => patch({ is_favorite: show.is_favorite ? 0 : 1 })}
               aria-label={show.is_favorite ? 'Remove from favourites' : 'Add to favourites'}
@@ -322,7 +330,7 @@ export default function ShowPage() {
             {show.next_air_date && (
               <span className="mono inline-flex items-center gap-2 rounded border border-edge bg-surface/70 px-3 py-2 text-[11px] text-ink/85 backdrop-blur-sm">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
-                S{show.next_season}E{show.next_episode} {countdown(show.next_air_date)}
+                {episodeLabel(show.next_season, show.next_episode)} {countdown(show.next_air_date)}
               </span>
             )}
           </>

@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { api, formatBytes, tmdbImg, posterUrl } from '../api';
+import { api, formatBytes, tmdbImg, posterUrl, episodeLabel, plural } from '../api';
 import { Poster, Badge, ProgressBar, EmptyState } from '../components/Bits';
 import { titleHue, primaryBtn, ghostBtn } from '../components/DetailHero';
 import { PlayButton } from '../components/MediaActions';
+
+// What you have decided about a title, not what the files say.
+export const STATUSES = [
+  { id: 'watching', label: 'Watching' },
+  { id: 'planned', label: 'Planned' },
+  { id: 'paused', label: 'Paused' },
+  { id: 'completed', label: 'Done' },
+  { id: 'dropped', label: 'Dropped' },
+];
 
 const SORTS = [
   { id: 'title', label: 'A–Z' },
@@ -52,7 +61,7 @@ function Hero({ item, onWatched, busy }) {
           </h1>
           <div className="mono mt-3.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-dim">
             <span className="text-ink">
-              S{item.season_number}E{item.episode_number}
+              {episodeLabel(item.season_number, item.episode_number)}
             </span>
             {item.episode_title && <span className="max-w-sm truncate">{item.episode_title}</span>}
             <span>·</span>
@@ -61,8 +70,11 @@ function Hero({ item, onWatched, busy }) {
             </span>
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-2.5">
-            <PlayButton target={{ episodeId: item.episode_id }} label={`${item.title} S${item.season_number}E${item.episode_number}`}>
-              Play S{item.season_number}E{item.episode_number}
+            <PlayButton
+              target={{ episodeId: item.episode_id }}
+              label={`${item.title} ${episodeLabel(item.season_number, item.episode_number)}`}
+            >
+              Play {episodeLabel(item.season_number, item.episode_number)}
             </PlayButton>
             <button onClick={onWatched} disabled={busy} className={ghostBtn}>
               Mark watched
@@ -121,7 +133,7 @@ function ShowCard({ show }) {
         {show.title}
       </div>
       <div className="mono truncate text-[10px] text-ink-dim">
-        {show.owned_episodes} eps · {formatBytes(show.size_bytes)}
+        {plural(show.owned_episodes, 'ep')} · {formatBytes(show.size_bytes)}
       </div>
     </Link>
   );
@@ -162,6 +174,7 @@ export default function LibraryPage() {
   const tab = params.get('tab') || 'shows';
   const search = params.get('search') || '';
   const sort = params.get('sort') || 'title';
+  const status = params.get('status') || '';
 
   const [shows, setShows] = useState(null);
   const [movies, setMovies] = useState(null);
@@ -173,8 +186,8 @@ export default function LibraryPage() {
     setLoading(true);
     try {
       const [s, m, queue] = await Promise.all([
-        api.shows({ search, sort }),
-        api.movies({ search, sort }),
+        api.shows({ search, sort, status: status || undefined }),
+        api.movies({ search, sort, status: status || undefined }),
         api.continueWatching(1),
       ]);
       setShows(s);
@@ -190,7 +203,7 @@ export default function LibraryPage() {
     const onRefresh = () => load();
     window.addEventListener('shelf:refresh', onRefresh);
     return () => window.removeEventListener('shelf:refresh', onRefresh);
-  }, [search, sort]);
+  }, [search, sort, status]);
 
   async function markHeroWatched() {
     if (!hero) return;
@@ -204,10 +217,12 @@ export default function LibraryPage() {
   }
 
   function setParam(key, value) {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setParams(next);
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set(key, value);
+      else next.delete(key);
+      return next;
+    });
   }
 
   const items = tab === 'shows' ? shows : movies;
@@ -237,9 +252,25 @@ export default function LibraryPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by status">
+            {STATUSES.map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setParam('status', status === f.id ? null : f.id)}
+                aria-pressed={status === f.id}
+                className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition ${
+                  status === f.id
+                    ? 'bg-accent/12 text-accent'
+                    : 'text-ink-dim hover:bg-surface hover:text-ink'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
           <span className="mono text-[11px] text-ink-dim">{formatBytes(totalBytes)}</span>
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             {SORTS.map((s) => (
               <button
                 key={s.id}
@@ -278,10 +309,28 @@ export default function LibraryPage() {
       ) : !items?.length ? (
         <EmptyState
           icon={tab === 'shows' ? '📺' : '🎞'}
-          title={search ? 'Nothing matched' : `No ${tab} indexed`}
-          hint={search ? 'Try a different title.' : 'Add a library folder in Settings, then run a scan.'}
+          title={
+            search ? 'Nothing matched'
+            : status ? `Nothing marked ${STATUSES.find((f) => f.id === status)?.label.toLowerCase()}`
+            : `No ${tab} indexed`
+          }
+          hint={
+            search ? 'Try a different title.'
+            : status ? 'Set the status from a show or film page.'
+            : 'Add a library folder in Settings, then run a scan.'
+          }
           action={
-            !search && (
+            search || status ? (
+              <button
+                onClick={() => {
+                  setParam('search', null);
+                  setParam('status', null);
+                }}
+                className={primaryBtn}
+              >
+                Clear filters
+              </button>
+            ) : (
               <Link to="/settings" className={primaryBtn}>
                 Open Settings
               </Link>

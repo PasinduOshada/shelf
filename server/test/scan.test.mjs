@@ -124,3 +124,12 @@ test('hidden files and folders are never scanned', () => {
   const shows = db.db.prepare('SELECT title FROM shows').all().map((r) => r.title);
   assert.ok(!shows.includes('Private'), 'a hidden folder became a show');
 });
+
+test('specials never lead the "watch next" queue', async () => {
+  // Severance has a Specials folder (season 0) and a season 1.
+  const q = await import('../src/queries.js');
+  const next = q.continueWatching(10).find((r) => r.title === 'Severance');
+  assert.ok(next, 'Severance is not queued at all');
+  assert.equal(next.season_number, 1, 'a special was offered before season 1');
+  assert.equal(next.episode_number, 1, 'wrong episode offered');
+});

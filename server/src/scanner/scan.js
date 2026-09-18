@@ -245,13 +245,9 @@ function scanTvLibrary(library, stats, excludes) {
   roots.sort((a, b) => b.length - a.length);
 
   for (const showRoot of roots) {
-    const show = upsertShow({
-      libraryId: library.id,
-      folderPath: showRoot,
-      folderName: basename(showRoot),
-    });
-    stats.shows++;
-
+    // Which files this root actually owns, decided before anything is created:
+    // a folder whose only videos are clips or phone exports is not a show.
+    const owned = [];
     for (const filePath of walkFiles(showRoot)) {
       const filename = basename(filePath);
       if (!isVideoFile(filename)) {
@@ -263,10 +259,22 @@ function scanTvLibrary(library, stats, excludes) {
         stats.skipped++;
         continue;
       }
-
       // Skip files owned by a nested (deeper) show root.
       const owner = roots.find((r) => filePath.startsWith(r + sep));
       if (owner && owner !== showRoot) continue;
+      owned.push(filePath);
+    }
+    if (!owned.length) continue;
+
+    const show = upsertShow({
+      libraryId: library.id,
+      folderPath: showRoot,
+      folderName: basename(showRoot),
+    });
+    stats.shows++;
+
+    for (const filePath of owned) {
+      const filename = basename(filePath);
 
       const dirSeason = seasonFromPath(filePath, showRoot);
       const parsed = parseFilename(filename, {

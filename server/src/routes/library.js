@@ -142,7 +142,11 @@ router.delete('/shows/:id/poster', (req, res) => {
 // ---------------------------------------------------------------- movies
 
 router.get('/movies', (req, res) => {
-  res.json(q.listMovies({ search: req.query.search || '', sort: req.query.sort || 'title' }));
+  res.json(q.listMovies({
+    search: req.query.search || '',
+    status: req.query.status || null,
+    sort: req.query.sort || 'title',
+  }));
 });
 
 router.get('/movies/:id', (req, res) => {
@@ -152,7 +156,7 @@ router.get('/movies/:id', (req, res) => {
 });
 
 router.patch('/movies/:id', (req, res) => {
-  const allowed = ['title', 'icon_emoji', 'accent_color', 'is_favorite', 'user_rating', 'notes', 'tags'];
+  const allowed = ['title', 'icon_emoji', 'accent_color', 'is_favorite', 'user_status', 'user_rating', 'notes', 'tags'];
   const sets = [];
   const vals = [];
   for (const k of allowed) {

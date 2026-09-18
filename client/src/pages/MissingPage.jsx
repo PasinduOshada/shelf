@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, formatBytes } from '../api';
+import { api, formatBytes, plural } from '../api';
 import { Poster, Badge, EmptyState, SectionTitle, Spinner } from '../components/Bits';
 import { FigureStrip, ghostBtn } from '../components/DetailHero';
 import Duplicates from '../components/Duplicates';
@@ -85,7 +85,7 @@ function MissingRow({ show }) {
         {whole.length > 0 && (
           <div className="mono mt-2 text-[11px] text-ink-dim">
             Not started: {runs(whole.map((s) => s.season_number)).map(seasonRange).join(', ')}
-            <span className="opacity-70"> · {wholeEpisodes} episodes</span>
+            <span className="opacity-70"> · {plural(wholeEpisodes, 'episode')}</span>
           </div>
         )}
       </div>
@@ -207,7 +207,7 @@ export default function MissingPage() {
             </div>
           ) : (
             <p className="text-[12.5px] text-ink-dim">
-              {onlyWhole.length} shows where everything you have is complete, but earlier or later
+              {plural(onlyWhole.length, 'show')} where everything you have is complete, but earlier or later
               seasons were never downloaded.
             </p>
           )}

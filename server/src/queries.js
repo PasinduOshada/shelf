@@ -193,7 +193,7 @@ export function getShow(showId) {
 
 // ---------------------------------------------------------------- movies
 
-export function listMovies({ search = '', sort = 'title' } = {}) {
+export function listMovies({ search = '', status = null, sort = 'title' } = {}) {
   const rows = db.prepare(`
     SELECT m.*, c.name AS collection_name,
       COALESCE(ms.watched, 0) AS watched, ms.watched_at, ms.rating AS watch_rating,
@@ -212,6 +212,8 @@ export function listMovies({ search = '', sort = 'title' } = {}) {
     const q = search.toLowerCase();
     out = out.filter((m) => m.title.toLowerCase().includes(q));
   }
+  if (status) out = out.filter((m) => m.user_status === status);
+
   if (sort === 'recent') out.sort((a, b) => String(b.added_at).localeCompare(String(a.added_at)));
   else if (sort === 'size') out.sort((a, b) => b.size_bytes - a.size_bytes);
   else if (sort === 'year') out.sort((a, b) => (b.year || 0) - (a.year || 0));
@@ -274,7 +276,8 @@ export function continueWatching(limit = 24) {
         JOIN files f2 ON f2.episode_id = e2.id AND f2.is_missing = 0
         LEFT JOIN episode_state es2 ON es2.episode_id = e2.id
         WHERE e2.show_id = s.id AND COALESCE(es2.watched, 0) = 0
-        ORDER BY e2.season_number, e2.episode_number LIMIT 1
+        -- Season 0 is specials: never the thing to watch next.
+        ORDER BY (e2.season_number = 0), e2.season_number, e2.episode_number LIMIT 1
       )
     GROUP BY s.id
     ORDER BY (last_watched_at IS NULL), last_watched_at DESC
@@ -442,19 +445,3 @@ export function missingReport() {
     .sort((a, b) => b.gap_count - a.gap_count || b.count - a.count);
 }
 
-/** Two or more files claiming the same episode. */
-export function duplicates() {
-  return db.prepare(`
-    SELECT s.title AS show_title, e.season_number, e.episode_number,
-           COUNT(*) AS copies,
-           GROUP_CONCAT(f.path, CHAR(10)) AS paths,
-           SUM(f.size_bytes) AS total_bytes
-    FROM files f
-    JOIN episodes e ON e.id = f.episode_id
-    JOIN shows s ON s.id = f.show_id
-    WHERE f.is_missing = 0
-    GROUP BY f.episode_id
-    HAVING COUNT(*) > 1
-    ORDER BY COUNT(*) DESC, total_bytes DESC
-  `).all().map((r) => ({ ...r, paths: String(r.paths).split('\n') }));
-}

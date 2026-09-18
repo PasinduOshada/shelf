@@ -74,6 +74,7 @@ export const api = {
 
   overview: () => req('/stats/overview'),
   activity: (days) => req(`/stats/activity${qs({ days })}`),
+  periods: (unit, count) => req(`/stats/periods${qs({ unit, count })}`),
   summaries: () => req('/stats/summaries'),
   streaks: () => req('/stats/streaks'),
   composition: () => req('/stats/composition'),
@@ -174,6 +175,18 @@ export const api = {
   downloadSubtitle: (target, subtitleFileId, language) =>
     req('/subtitles/download', { method: 'POST', body: { ...target, subtitleFileId, language } }),
 };
+
+/** "1 episode", "3 episodes": the noun agrees with the number. */
+export function plural(n, one, many = one + 's') {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** "S01E04", or "Special 2" for season zero, which is not episode "S00". */
+export function episodeLabel(season, episode) {
+  const pad = (n) => String(n ?? 0).padStart(2, '0');
+  if (Number(season) === 0) return `Special ${episode ?? ''}`.trim();
+  return `S${pad(season)}E${pad(episode)}`;
+}
 
 export function formatBytes(bytes) {
   if (!bytes) return '0 B';

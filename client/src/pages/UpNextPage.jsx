@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api';
+import { api, episodeLabel, plural } from '../api';
 import { Poster, ProgressBar, EmptyState, SectionTitle, Spinner } from '../components/Bits';
 import { titleHue, primaryBtn, ghostBtn } from '../components/DetailHero';
 import { playTarget } from '../components/MediaActions';
@@ -21,7 +21,7 @@ function CountdownCard({ item }) {
           {item.show_title}
         </div>
         <div className="mono mt-0.5 truncate text-[10.5px] text-ink-dim">
-          S{item.season_number}E{item.episode_number}
+          {episodeLabel(item.season_number, item.episode_number)}
           {item.episode_title ? ` · ${item.episode_title}` : ''}
         </div>
         <div className="mt-auto flex items-baseline gap-1.5">
@@ -51,7 +51,7 @@ function NewEpisodes({ airing }) {
       <SectionTitle>New this week</SectionTitle>
       <div className="overflow-hidden rounded-card border border-edge">
         {list.slice(0, 20).map((e) => {
-          const code = `S${String(e.season_number).padStart(2, '0')}E${String(e.episode_number).padStart(2, '0')}`;
+          const code = episodeLabel(e.season_number, e.episode_number);
           return (
             <div key={e.id} className="flex items-center gap-3 border-b border-edge/60 px-3 py-2 last:border-b-0">
               <Link to={`/show/${e.show_id}`} className="w-9 shrink-0">
@@ -112,7 +112,7 @@ function ContinueCard({ item, onWatched, busy }) {
             {item.title}
           </Link>
           <div className="mono mt-1 truncate text-[11px] text-ink-dim">
-            S{item.season_number}E{item.episode_number}
+            {episodeLabel(item.season_number, item.episode_number)}
             {item.episode_title ? ` · ${item.episode_title}` : ''}
           </div>
           <div className="mt-auto pt-3">
@@ -300,7 +300,7 @@ export default function UpNextPage() {
                 <div className="mt-2 truncate text-[12px] font-medium text-ink group-hover:text-accent">
                   {item.title}
                 </div>
-                <div className="mono truncate text-[10px] text-ink-dim">{item.owned_count} eps</div>
+                <div className="mono truncate text-[10px] text-ink-dim">{plural(item.owned_count, 'ep')}</div>
               </Link>
             ))}
           </div>
