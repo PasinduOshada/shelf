@@ -2,6 +2,7 @@ import { readdirSync, statSync, existsSync } from 'node:fs';
 import { join, basename, dirname, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db, transaction, sortTitle, getSetting } from '../db.js';
+import { hiddenFilter, nothingHidden } from '../hidden.js';
 import {
   parseFilename, parseFolderName, isVideoFile, isSubtitleFile,
   isJunkName, isClipFile, SKIP_DIR, SAMPLE_DIR,
@@ -11,6 +12,9 @@ const SEASON_DIR = /^(?:season|series|s)[\s._-]*(\d{1,3})$/i;
 const SPECIALS_DIR = /^(?:specials?|extras?)$/i;
 
 const isSeasonDir = (name) => SEASON_DIR.test(name) || SPECIALS_DIR.test(name);
+
+// Set for the library being scanned; hidden entries are never walked into.
+let isHidden = nothingHidden;
 
 function normalize(p) {
   return String(p).replace(/[\\/]+/g, '/').toLowerCase();
@@ -41,6 +45,7 @@ function walkFiles(dir, out = []) {
   }
   for (const e of entries) {
     const full = join(dir, e.name);
+    if (isHidden(full, e.name)) continue;
     if (e.isDirectory()) {
       if (!SKIP_DIR.test(e.name)) walkFiles(full, out);
     } else out.push(full);
@@ -52,6 +57,7 @@ function listDirs(dir) {
   try {
     return readdirSync(dir, { withFileTypes: true })
       .filter((e) => e.isDirectory() && !SKIP_DIR.test(e.name))
+      .filter((e) => !isHidden(join(dir, e.name), e.name))
       .map((e) => e.name);
   } catch {
     return [];
@@ -60,7 +66,9 @@ function listDirs(dir) {
 
 function listFiles(dir) {
   try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isFile()).map((e) => e.name);
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && !isHidden(join(dir, e.name), e.name))
+      .map((e) => e.name);
   } catch {
     return [];
   }
@@ -374,6 +382,7 @@ export function scanLibraries({ libraryId = null } = {}) {
   for (const library of libs) {
     if (!existsSync(library.path)) continue;
     stats.libraries++;
+    isHidden = hiddenFilter([library.path]);
     transaction(() => {
       if (library.kind === 'tv') scanTvLibrary(library, stats, excludes);
       else scanMovieLibrary(library, stats, excludes);
@@ -390,6 +399,7 @@ export function scanLibraries({ libraryId = null } = {}) {
     }
   });
 
+  isHidden = nothingHidden;
   stats.durationMs = Date.now() - started;
   return stats;
 }

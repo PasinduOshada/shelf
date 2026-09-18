@@ -3,9 +3,16 @@
 // artwork, subtitles or anything else that lives beside them.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, truncateSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, truncateSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+
+/** Mark a path hidden the way Windows does; elsewhere the dot name stands in. */
+function hide(path) {
+  if (process.platform !== 'win32') return;
+  execFileSync('attrib', ['+h', path], { windowsHide: true });
+}
 
 let scanner;
 let db;
@@ -36,6 +43,13 @@ before(async () => {
   file(join(tv, 'Holiday photos', 'notes.txt'));
   // An episode whose own title is "Free Sample": not a clip.
   file(join(tv, 'Mrs Fletcher', 'Mrs_Fletcher_S01E02_Free_Sample_720p_WEBRip.mkv'));
+
+  // Hidden, by the Windows attribute and by name.
+  file(join(tv, 'Private', 'Private.S01E01.1080p.mkv'));
+  hide(join(tv, 'Private'));
+  file(join(tv, 'Severance', 'Season 01', 'Severance.S01E09.1080p.mkv'));
+  hide(join(tv, 'Severance', 'Season 01', 'Severance.S01E09.1080p.mkv'));
+  file(join(tv, '.stfolder', 'Severance.S01E08.1080p.mkv'));
 
   const films = join(work, 'Films');
   file(join(films, 'Dune Part Two (2024) 1080p.mkv'));
@@ -97,4 +111,16 @@ test('a folder with no video in it never becomes a show', () => {
 test('a feature-length file called "sample" is still a film', () => {
   // Size decides: a clip is small, so the name alone never loses a real film.
   assert.ok(paths().includes('The Sample (2019) 1080p.mkv'));
+});
+
+test('hidden files and folders are never scanned', () => {
+  // They are on disk and readable: only the hidden mark keeps them out.
+  assert.ok(existsSync(join(work, 'TV', 'Private', 'Private.S01E01.1080p.mkv')));
+  assert.ok(existsSync(join(work, 'TV', 'Severance', 'Season 01', 'Severance.S01E09.1080p.mkv')));
+  const kept = paths();
+  assert.ok(!kept.includes('Private.S01E01.1080p.mkv'), 'a hidden folder is walked past');
+  assert.ok(!kept.includes('Severance.S01E09.1080p.mkv'), 'a hidden file is picked up');
+  assert.ok(!kept.includes('Severance.S01E08.1080p.mkv'), 'a dot folder is walked past');
+  const shows = db.db.prepare('SELECT title FROM shows').all().map((r) => r.title);
+  assert.ok(!shows.includes('Private'), 'a hidden folder became a show');
 });

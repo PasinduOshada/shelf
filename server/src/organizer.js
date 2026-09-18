@@ -27,6 +27,7 @@ import {
 } from './scanner/parse.js';
 import { hasApiKey, lookupTitle, seasonEpisodeNames } from './tmdb.js';
 import { probeAvailable, probeFile } from './mediainfo.js';
+import { hiddenFilter } from './hidden.js';
 
 // ---------------------------------------------------------------- naming
 
@@ -311,7 +312,7 @@ function stillDownloading(name, siblings) {
 }
 
 /** Every video under the roots, with the folder names between each and its root. */
-function walk(roots, excludes) {
+function walk(roots, excludes, isHidden) {
   const out = { videos: [], ignored: [], truncated: false };
   const dataDir = resolve(DATA_DIR).toLowerCase();
 
@@ -327,6 +328,7 @@ function walk(roots, excludes) {
     for (const name of files) {
       if (!isVideoFile(name)) continue;
       const path = join(dir, name);
+      if (isHidden(path, name)) continue;
       const st = statOf(path);
       const size = st?.size ?? null;
       if (isClipFile(name, size) || SAMPLE_DIR.test(basename(dir))) {
@@ -345,6 +347,7 @@ function walk(roots, excludes) {
     for (const e of entries) {
       if (!e.isDirectory()) continue;
       if (SKIP_DIR.test(e.name) || excludes.has(e.name.toLowerCase())) continue;
+      if (isHidden(join(dir, e.name), e.name)) continue;
       const child = join(dir, e.name);
       if (child.toLowerCase() === dataDir) continue;
       visit(child, [e.name, ...ancestors], depth + 1);
@@ -516,7 +519,7 @@ export async function planImport({
   const excludes = new Set(
     JSON.parse(getSetting('scan.excludes', '[]')).map((s) => String(s).toLowerCase())
   );
-  const found = walk(roots_, excludes);
+  const found = walk(roots_, excludes, hiddenFilter(roots_));
 
   const unidentified = [];
   const shows = new Map();

@@ -113,7 +113,9 @@ Then in **Settings**, add your library folders (one for TV, one for Movies) and 
 A scan only picks up video files that look like an episode or a film. Subtitles are noted
 beside their video; documents, artwork, music and archives are ignored outright; and
 release samples, trailers and phone or camera exports (`VID_20240102…`, WhatsApp
-downloads, screen recordings) are left out and counted in the scan summary. Anything else
+downloads, screen recordings) are left out and counted in the scan summary. Hidden files
+and folders are never opened — the Windows hidden attribute and dot-names both count, and
+nothing inside a hidden folder is reached at all. Anything else
 you would rather not index — courses, recordings, work files — goes in **Ignored folders**.
 
 ## Desktop app
