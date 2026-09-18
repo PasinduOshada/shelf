@@ -168,7 +168,11 @@ or the long *Read Access Token*.
 - Artwork is downloaded once into `server/data/cache/images/` (`%APPDATA%/Shelf/cache/images/`
   in the desktop app) and served locally, so posters keep working offline.
 
-The key is stored in your local database and used only to call TMDB.
+The key is stored in your local database and used only to call TMDB. In the desktop app
+it — and your OpenSubtitles and Trakt credentials — are encrypted for your Windows
+account, so a copy of the database or a backup of it gives nothing away. Running the
+server on its own cannot read those, so set `TMDB_API_KEY` in the environment for
+development.
 
 ## How it's built
 

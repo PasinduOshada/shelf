@@ -242,8 +242,8 @@ export default function SettingsPage() {
               >
                 TMDB API key
               </a>{' '}
-              adds posters, backdrops, real episode lists, air dates and countdowns. The key stays in
-              your local database.
+              adds posters, backdrops, real episode lists, air dates and countdowns. The key stays on
+              this computer{tmdb?.encrypted ? ', encrypted for your Windows account' : ''}.
             </p>
 
             <div className="mt-4 flex gap-2.5">

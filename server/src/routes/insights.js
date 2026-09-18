@@ -3,6 +3,7 @@ import { db, getSetting, setSetting } from '../db.js';
 import * as q from '../queries.js';
 import * as stats from '../stats.js';
 import * as watch from '../watch.js';
+import { hasApiKey } from '../tmdb.js';
 
 const router = Router();
 
@@ -135,7 +136,7 @@ router.get('/settings', (_req, res) => {
     excludes: JSON.parse(getSetting('scan.excludes', '[]')),
     theme: getSetting('ui.theme', 'dark'),
     accent: getSetting('ui.accent', 'violet'),
-    tmdbConfigured: Boolean(getSetting('tmdb.apiKey') || process.env.TMDB_API_KEY),
+    tmdbConfigured: hasApiKey(),
   });
 });
 

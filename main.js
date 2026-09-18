@@ -7,7 +7,7 @@
 // When "keep running in the background" is on, closing the window leaves
 // Shelf in the system tray so watched folders keep being organised, and it can
 // start with Windows (hidden, straight to the tray).
-const { app, BrowserWindow, shell, dialog, ipcMain, Tray, Menu, Notification, nativeImage } = require('electron');
+const { app, BrowserWindow, shell, dialog, ipcMain, Tray, Menu, Notification, nativeImage, safeStorage } = require('electron');
 const path = require('node:path');
 
 // Redirect all writable state into userData BEFORE the server module loads.
@@ -46,6 +46,7 @@ async function startServer() {
   const { scheduleAutoOrganize, autoEvents } = await import('./server/src/autoOrganize.js');
   const { getSetting, setSetting } = await import('./server/src/db.js');
   const { setTrashHandler } = await import('./server/src/trash.js');
+  const { setSecretVault } = await import('./server/src/secrets.js');
   const { scheduleAiringAlerts, airingEvents } = await import('./server/src/airing.js');
   const { scheduleProbe } = await import('./server/src/mediainfo.js');
   const { scheduleTraktSync } = await import('./server/src/importers/trakt.js');
@@ -53,6 +54,14 @@ async function startServer() {
   settings = { get: getSetting, set: setSetting };
   // The Recycle Bin, through Windows itself.
   setTrashHandler((p) => shell.trashItem(p));
+  // Keys and tokens are encrypted for this Windows account (DPAPI), so a copy
+  // of the database on its own gives nothing away.
+  if (safeStorage.isEncryptionAvailable()) {
+    setSecretVault({
+      encrypt: (text) => safeStorage.encryptString(text).toString('base64'),
+      decrypt: (data) => safeStorage.decryptString(Buffer.from(data, 'base64')),
+    });
+  }
   autoEvents.on('run', notifyRun);
   airingEvents.on('aired', notifyAired);
   playbackEvents.on('watched', (e) => notify(`Marked ${e.label || 'it'} as watched.`, '/up-next'));

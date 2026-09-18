@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { startProbe } from '../mediainfo.js';
+import { setSecret, secretsEncrypted } from '../secrets.js';
 import multer from 'multer';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -194,6 +195,7 @@ router.get('/tmdb/status', (_req, res) => {
   const count = (sql) => db.prepare(sql).get().c;
   res.json({
     configured: hasApiKey(),
+    encrypted: secretsEncrypted(),
     lastEnrich: getSetting('tmdb.lastEnrich'),
     unmatched: {
       shows: count('SELECT COUNT(*) c FROM shows WHERE tmdb_id IS NULL'),
@@ -219,7 +221,7 @@ router.post('/tmdb/key', async (req, res) => {
     console.error('TMDB key verification failed:', err);
     return res.status(502).json({ error: `Could not reach TMDB (${cause}). Check your internet connection and try again.` });
   }
-  setSetting('tmdb.apiKey', key);
+  setSecret('tmdb.apiKey', key);
   res.json({ ok: true, configured: true });
 });
 

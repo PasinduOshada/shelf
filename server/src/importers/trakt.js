@@ -7,6 +7,7 @@
 // by TMDB id, so only matched shows and films take part. Shows that use a
 // custom episode ordering are skipped: their numbers differ from Trakt's.
 import { db, getSetting, setSetting } from '../db.js';
+import { getSecret, setSecret } from '../secrets.js';
 import { setEpisodeWatched, setMovieWatched } from '../watch.js';
 
 const API = 'https://api.trakt.tv';
@@ -14,9 +15,9 @@ const REDIRECT = 'urn:ietf:wg:oauth:2.0:oob';
 
 const cfg = () => ({
   clientId: getSetting('trakt.clientId') || '',
-  clientSecret: getSetting('trakt.clientSecret') || '',
-  token: getSetting('trakt.accessToken') || '',
-  refresh: getSetting('trakt.refreshToken') || '',
+  clientSecret: getSecret('trakt.clientSecret') || '',
+  token: getSecret('trakt.accessToken') || '',
+  refresh: getSecret('trakt.refreshToken') || '',
   expiresAt: Number(getSetting('trakt.expiresAt') || 0),
 });
 
@@ -46,12 +47,13 @@ export function setTraktApp({ clientId, clientSecret }) {
     throw new TraktError('Paste the Client ID and Client Secret from your Trakt API app (64 characters each)');
   }
   setSetting('trakt.clientId', id);
-  setSetting('trakt.clientSecret', secret);
+  setSecret('trakt.clientSecret', secret);
   return traktStatus();
 }
 
 export function disconnectTrakt() {
-  for (const k of ['trakt.accessToken', 'trakt.refreshToken', 'trakt.expiresAt', 'trakt.username']) setSetting(k, '');
+  for (const k of ['trakt.accessToken', 'trakt.refreshToken']) setSecret(k, '');
+  for (const k of ['trakt.expiresAt', 'trakt.username']) setSetting(k, '');
   device = null;
   return traktStatus();
 }
@@ -66,7 +68,7 @@ async function call(path, { method = 'GET', body, auth = true } = {}) {
     'trakt-api-key': c.clientId,
     'User-Agent': 'Shelf/0.1.0',
   };
-  if (auth) headers.Authorization = `Bearer ${getSetting('trakt.accessToken')}`;
+  if (auth) headers.Authorization = `Bearer ${getSecret('trakt.accessToken')}`;
   let res;
   try {
     res = await fetch(API + path, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30_000) });
@@ -102,8 +104,8 @@ async function ensureFresh() {
 }
 
 function saveTokens(t) {
-  setSetting('trakt.accessToken', t.access_token);
-  setSetting('trakt.refreshToken', t.refresh_token);
+  setSecret('trakt.accessToken', t.access_token);
+  setSecret('trakt.refreshToken', t.refresh_token);
   setSetting('trakt.expiresAt', String((t.created_at * 1000 || Date.now()) + t.expires_in * 1000));
 }
 
@@ -233,7 +235,7 @@ let syncTimer = null;
 export function scheduleTraktSync() {
   if (syncTimer) return;
   syncTimer = setInterval(() => {
-    if (getSetting('trakt.accessToken') && getSetting('trakt.autoSync', '1') === '1') syncTrakt().catch(() => {});
+    if (getSecret('trakt.accessToken') && getSetting('trakt.autoSync', '1') === '1') syncTrakt().catch(() => {});
   }, 6 * 60 * 60_000);
   syncTimer.unref?.();
 }

@@ -6,13 +6,14 @@
 // Delhi") or noisy ("Oggy & The Crokroachers").
 import { randomUUID } from 'node:crypto';
 import { db, getSetting, setSetting, transaction, sortTitle } from './db.js';
+import { getSecret } from './secrets.js';
 import { cacheImage } from './images.js';
 import { parseFilename, parseFolderName } from './scanner/parse.js';
 
 const BASE = 'https://api.themoviedb.org/3';
 
 export function getApiKey() {
-  return process.env.TMDB_API_KEY || getSetting('tmdb.apiKey') || null;
+  return process.env.TMDB_API_KEY || getSecret('tmdb.apiKey') || null;
 }
 
 export function hasApiKey() {

@@ -8,6 +8,7 @@ import { open, writeFile, readdir } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
 import { join, dirname, basename, extname } from 'node:path';
 import { db, getSetting, setSetting } from './db.js';
+import { getSecret, setSecret } from './secrets.js';
 import { isSubtitleFile } from './scanner/parse.js';
 import { findFile } from './player.js';
 
@@ -62,8 +63,8 @@ export function subtitleIndex(paths) {
 
 export function subtitleSettings() {
   return {
-    configured: Boolean(getSetting('opensubtitles.apiKey')),
-    signed_in: Boolean(getSetting('opensubtitles.token')),
+    configured: Boolean(getSecret('opensubtitles.apiKey')),
+    signed_in: Boolean(getSecret('opensubtitles.token')),
     username: getSetting('opensubtitles.username') || null,
     languages: getSetting('subtitles.languages') || 'en',
     hide_machine: getSetting('subtitles.hideMachine', '1') === '1',
@@ -89,7 +90,7 @@ class SubtitleError extends Error {
   }
 }
 
-async function os(path, { method = 'GET', params = {}, body, key = getSetting('opensubtitles.apiKey'), auth = true } = {}) {
+async function os(path, { method = 'GET', params = {}, body, key = getSecret('opensubtitles.apiKey'), auth = true } = {}) {
   if (!key) throw new SubtitleError('Add an OpenSubtitles API key in Settings first.', 400);
   const url = new URL(API + path);
   // OpenSubtitles asks for sorted, lowercase parameters (it redirects otherwise).
@@ -98,7 +99,7 @@ async function os(path, { method = 'GET', params = {}, body, key = getSetting('o
     if (v != null && v !== '') url.searchParams.set(k, String(v).toLowerCase());
   }
   const headers = { 'Api-Key': key, 'User-Agent': USER_AGENT, Accept: 'application/json' };
-  const token = auth ? getSetting('opensubtitles.token') : null;
+  const token = auth ? getSecret('opensubtitles.token') : null;
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body) headers['Content-Type'] = 'application/json';
 
@@ -122,7 +123,7 @@ async function os(path, { method = 'GET', params = {}, body, key = getSetting('o
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && token) {
     // Expired sign-in: forget it so the next call can still work anonymously.
-    setSetting('opensubtitles.token', '');
+    setSecret('opensubtitles.token', '');
     throw new SubtitleError('Your OpenSubtitles sign-in expired. Sign in again in Settings.', 401);
   }
   if (path === '/login' && (res.status === 400 || res.status === 401)) {
@@ -144,13 +145,13 @@ async function os(path, { method = 'GET', params = {}, body, key = getSetting('o
 export async function setApiKey(key) {
   const trimmed = String(key || '').trim();
   if (!trimmed) {
-    setSetting('opensubtitles.apiKey', '');
-    setSetting('opensubtitles.token', '');
+    setSecret('opensubtitles.apiKey', '');
+    setSecret('opensubtitles.token', '');
     return subtitleSettings();
   }
   // A cheap call that, unlike /infos/*, actually checks the key.
   await os('/discover/popular', { key: trimmed, auth: false, params: { languages: 'en', type: 'movie' } });
-  setSetting('opensubtitles.apiKey', trimmed);
+  setSecret('opensubtitles.apiKey', trimmed);
   return subtitleSettings();
 }
 
@@ -160,15 +161,15 @@ export async function setApiKey(key) {
  */
 export async function signIn(username, password) {
   if (!username || !password) throw new SubtitleError('Enter your OpenSubtitles username and password');
-  setSetting('opensubtitles.token', '');
+  setSecret('opensubtitles.token', '');
   const data = await os('/login', { method: 'POST', body: { username, password }, auth: false });
-  setSetting('opensubtitles.token', data.token);
+  setSecret('opensubtitles.token', data.token);
   setSetting('opensubtitles.username', data.user?.username || username);
   return { ...subtitleSettings(), allowed_downloads: data.user?.allowed_downloads ?? null };
 }
 
 export function signOut() {
-  setSetting('opensubtitles.token', '');
+  setSecret('opensubtitles.token', '');
   setSetting('opensubtitles.username', '');
   return subtitleSettings();
 }
