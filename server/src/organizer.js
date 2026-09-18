@@ -21,7 +21,10 @@ import { join, dirname, basename, extname, isAbsolute, resolve, relative } from 
 import { randomUUID } from 'node:crypto';
 import { db, transaction, getSetting } from './db.js';
 import { DATA_DIR } from './paths.js';
-import { parseFilename, parseFolderName, isVideoFile, isSubtitleFile } from './scanner/parse.js';
+import {
+  parseFilename, parseFolderName, isVideoFile, isSubtitleFile,
+  isJunkName, isClipFile, SKIP_DIR, SAMPLE_DIR,
+} from './scanner/parse.js';
 import { hasApiKey, lookupTitle, seasonEpisodeNames } from './tmdb.js';
 import { probeAvailable, probeFile } from './mediainfo.js';
 
@@ -152,15 +155,7 @@ function seasonDir(showDir, season, pad) {
 
 // ---------------------------------------------------------------- identification
 
-// Camera, phone and messenger exports: never guess a film title from these.
-const JUNK_NAMES = [
-  /^(?:doc|vid|img|pxl|mvimg|wa|dsc|gopr|mov|screen[\s_-]?recording|recording|video|movie|untitled|new[\s_-]?video|clip)(?:[\s._-]*\d.*)?$/i,
-  /^(?:whatsapp|telegram|signal|messenger|snapchat|instagram|tiktok|facebook|screenrecorder)[\s._-]*(?:video|clip|reel)?(?:[\s._-]*\d.*)?$/i,
-  // Camera timestamps: "20250101_101010", "2025-01-01 10.10.10".
-  /^\d{4}[-_]?\d{2}[-_]?\d{2}[\s._-]+\d{2}[-_.]?\d{2}/,
-];
-const JUNK = { test: (s) => JUNK_NAMES.some((re) => re.test(s)) };
-const SAMPLE = /(?:^|[\s._-])sample(?:[\s._-]|$)/i;
+const JUNK = { test: isJunkName };
 const EPISODE_WORD = /(?:^|[\s._-])(?:episode|ep)[\s._-]*(\d{1,3})(?!\d)/i;
 const LEADING_NUMBER = /^(\d{1,3})(?=[\s._-]|$)/;
 // Release tags the parser can hand back as an "episode title" ("1080p WEB").
@@ -295,10 +290,8 @@ const PART_RE = /(?:^|[\s._-])(part|pt|cd|disc|disk)[\s._-]*(\d{1,2})(?![\d])/i;
 
 // ---------------------------------------------------------------- walking
 
-const SKIP_DIR = /^(?:\$.*|system volume information|recovery|windows|program files.*|programdata|appdata|node_modules|\.git|\.trash.*|@eadir|#recycle)$/i;
 const MAX_FILES = 25000;
 const MAX_DEPTH = 12;
-const SAMPLE_MAX_BYTES = 300 * 1024 ** 2;
 
 function statOf(p) {
   try {
@@ -336,8 +329,8 @@ function walk(roots, excludes) {
       const path = join(dir, name);
       const st = statOf(path);
       const size = st?.size ?? null;
-      if (SAMPLE.test(name) && (size ?? 0) < SAMPLE_MAX_BYTES) {
-        out.ignored.push({ from: path, size_bytes: size, reason: 'Sample clip' });
+      if (isClipFile(name, size) || SAMPLE_DIR.test(basename(dir))) {
+        out.ignored.push({ from: path, size_bytes: size, reason: 'Sample or trailer' });
         continue;
       }
       out.videos.push({

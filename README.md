@@ -110,6 +110,12 @@ Open <http://localhost:5180>.
 
 Then in **Settings**, add your library folders (one for TV, one for Movies) and hit **Scan**.
 
+A scan only picks up video files that look like an episode or a film. Subtitles are noted
+beside their video; documents, artwork, music and archives are ignored outright; and
+release samples, trailers and phone or camera exports (`VID_20240102…`, WhatsApp
+downloads, screen recordings) are left out and counted in the scan summary. Anything else
+you would rather not index — courses, recordings, work files — goes in **Ignored folders**.
+
 ## Desktop app
 
 The same codebase ships as a desktop app — Electron just hosts the Express server on an

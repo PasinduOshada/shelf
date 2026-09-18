@@ -250,3 +250,45 @@ export function isVideoFile(filename) {
 export function isSubtitleFile(filename) {
   return SUB_EXT.has(stripExt(filename).ext);
 }
+
+// ------------------------------------------------- what is not a film or episode
+
+// Camera, phone and messenger exports: never a title, whatever else the name
+// suggests. Shared with the organizer so both agree on what to leave alone.
+const JUNK_NAMES = [
+  /^(?:doc|vid|img|pxl|mvimg|wa|dsc|gopr|mov|screen[\s_-]?recording|recording|video|movie|untitled|new[\s_-]?video|clip)(?:[\s._-]*\d.*)?$/i,
+  /^(?:whatsapp|telegram|signal|messenger|snapchat|instagram|tiktok|facebook|screenrecorder)[\s._-]*(?:video|clip|reel)?(?:[\s._-]*\d.*)?$/i,
+  // Camera timestamps: "20250101_101010", "2025-01-01 10.10.10".
+  /^\d{4}[-_]?\d{2}[-_]?\d{2}[\s._-]+\d{2}[-_.]?\d{2}/,
+];
+
+// Release clips put the word first or last ("sample.mkv", "Film.2020-sample").
+// In the middle it is usually the title itself: "Mrs Fletcher S01E02 Free
+// Sample 720p WEBRip" is an episode, not a clip.
+const clipWord = (word) =>
+  new RegExp(`^(?:${word})(?:[\s._-]|$)|(?:^|[\s._-])(?:${word})$`, 'i');
+const SAMPLE = clipWord('sample');
+const TRAILER = clipWord('trailer|teaser');
+/** A folder releases put their sample clip in. */
+export const SAMPLE_DIR = /^samples?$/i;
+// A "sample" that is feature-length is just a film with an odd name.
+const SAMPLE_MAX_BYTES = 300 * 1024 ** 2;
+
+/** System and tooling folders no library scan should descend into. */
+export const SKIP_DIR =
+  /^(?:\$.*|system volume information|recovery|windows|program files.*|programdata|appdata|node_modules|\.git|\.trash.*|@eadir|#recycle)$/i;
+
+/** A camera or messenger export, given a name without its extension. */
+export function isJunkName(stem) {
+  return JUNK_NAMES.some((re) => re.test(stem));
+}
+
+/**
+ * A clip that came along with a release rather than being one: samples,
+ * trailers and teasers. Size is optional; without it, name alone decides.
+ */
+export function isClipFile(filename, sizeBytes = null) {
+  const { base } = stripExt(filename);
+  const small = (sizeBytes ?? 0) < SAMPLE_MAX_BYTES;
+  return (SAMPLE.test(base) && small) || (TRAILER.test(base) && small);
+}

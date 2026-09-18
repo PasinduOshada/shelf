@@ -2,7 +2,10 @@ import { readdirSync, statSync, existsSync } from 'node:fs';
 import { join, basename, dirname, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db, transaction, sortTitle, getSetting } from '../db.js';
-import { parseFilename, parseFolderName, isVideoFile, isSubtitleFile } from './parse.js';
+import {
+  parseFilename, parseFolderName, isVideoFile, isSubtitleFile,
+  isJunkName, isClipFile, SKIP_DIR, SAMPLE_DIR,
+} from './parse.js';
 
 const SEASON_DIR = /^(?:season|series|s)[\s._-]*(\d{1,3})$/i;
 const SPECIALS_DIR = /^(?:specials?|extras?)$/i;
@@ -38,15 +41,18 @@ function walkFiles(dir, out = []) {
   }
   for (const e of entries) {
     const full = join(dir, e.name);
-    if (e.isDirectory()) walkFiles(full, out);
-    else out.push(full);
+    if (e.isDirectory()) {
+      if (!SKIP_DIR.test(e.name)) walkFiles(full, out);
+    } else out.push(full);
   }
   return out;
 }
 
 function listDirs(dir) {
   try {
-    return readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !SKIP_DIR.test(e.name))
+      .map((e) => e.name);
   } catch {
     return [];
   }
@@ -83,6 +89,17 @@ function collectShowRoots(dir, excludes, depth = 0) {
     }
   }
   return roots;
+}
+
+/**
+ * A video that is not the film or episode itself: release samples, trailers,
+ * and phone or camera exports that happen to sit in a media folder.
+ */
+function isNotLibraryMedia(filePath, filename) {
+  if (isJunkName(filename.replace(/\.[^.]+$/, ''))) return true;
+  if (SAMPLE_DIR.test(basename(dirname(filePath)))) return true;
+  const { size } = fileStat(filePath);
+  return isClipFile(filename, size);
 }
 
 function seasonFromPath(filePath, showRoot) {
@@ -234,6 +251,10 @@ function scanTvLibrary(library, stats, excludes) {
         continue;
       }
       if (isExcluded(filePath, excludes)) continue;
+      if (isNotLibraryMedia(filePath, filename)) {
+        stats.skipped++;
+        continue;
+      }
 
       // Skip files owned by a nested (deeper) show root.
       const owner = roots.find((r) => filePath.startsWith(r + sep));
@@ -283,6 +304,10 @@ function scanMovieLibrary(library, stats, excludes) {
     if (!isVideoFile(filename)) continue;
     const filePath = join(library.path, filename);
     if (isExcluded(filePath, excludes)) continue;
+    if (isNotLibraryMedia(filePath, filename)) {
+      stats.skipped++;
+      continue;
+    }
 
     const parsed = parseFilename(filename);
     if (!parsed.title) continue;
@@ -305,7 +330,12 @@ function scanMovieLibrary(library, stats, excludes) {
 
     const videoFiles = walkFiles(dirPath)
       .filter((f) => isVideoFile(basename(f)))
-      .filter((f) => !isExcluded(f, excludes));
+      .filter((f) => !isExcluded(f, excludes))
+      .filter((f) => {
+        if (!isNotLibraryMedia(f, basename(f))) return true;
+        stats.skipped++;
+        return false;
+      });
     if (!videoFiles.length) continue;
 
     const collection = videoFiles.length > 1 ? upsertCollection(folderName) : null;
@@ -337,7 +367,7 @@ export function scanLibraries({ libraryId = null } = {}) {
   const excludes = loadExcludes();
   const stats = {
     libraries: 0, shows: 0, episodes: 0, movies: 0,
-    files: 0, extras: 0, subtitles: 0, missing: 0, durationMs: 0,
+    files: 0, extras: 0, subtitles: 0, skipped: 0, missing: 0, durationMs: 0,
   };
   const started = Date.now();
 

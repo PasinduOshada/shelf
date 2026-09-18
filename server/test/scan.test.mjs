@@ -1,0 +1,100 @@
+// What a scan puts in the library, against a throwaway folder tree.
+// Only films and episodes belong there: not samples, trailers, phone clips,
+// artwork, subtitles or anything else that lives beside them.
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, truncateSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+let scanner;
+let db;
+let work;
+let stats;
+
+const BIG = 400 * 1024 ** 2; // past the point where "sample" means a clip
+
+function file(path, bytes = 1024) {
+  mkdirSync(join(path, '..'), { recursive: true });
+  writeFileSync(path, '');
+  truncateSync(path, bytes); // sparse: a feature-length size without the bytes
+}
+
+before(async () => {
+  work = mkdtempSync(join(tmpdir(), 'shelf-scan-'));
+  process.env.SHELF_DATA_DIR = join(work, 'data');
+  process.env.SHELF_DB_PATH = join(work, 'data', 'test.db');
+  mkdirSync(process.env.SHELF_DATA_DIR);
+
+  const tv = join(work, 'TV');
+  file(join(tv, 'Severance', 'Season 01', 'Severance.S01E01.1080p.mkv'));
+  file(join(tv, 'Severance', 'Season 01', 'Severance.S01E01.1080p.srt'));
+  file(join(tv, 'Severance', 'Season 01', 'sample.mkv'));
+  file(join(tv, 'Severance', 'Season 01', 'poster.jpg'));
+  file(join(tv, 'Severance', 'Trailer.mkv'));
+  file(join(tv, 'Severance', 'WhatsApp Video 2025-01-01 at 10.10.10.mp4'));
+  file(join(tv, 'Holiday photos', 'notes.txt'));
+  // An episode whose own title is "Free Sample": not a clip.
+  file(join(tv, 'Mrs Fletcher', 'Mrs_Fletcher_S01E02_Free_Sample_720p_WEBRip.mkv'));
+
+  const films = join(work, 'Films');
+  file(join(films, 'Dune Part Two (2024) 1080p.mkv'));
+  file(join(films, 'Dune Part Two (2024) 1080p-sample.mkv'));
+  file(join(films, 'Arrival (2016)', 'Arrival.2016.1080p.mkv'));
+  file(join(films, 'Arrival (2016)', 'Arrival.2016.teaser.mp4'));
+  file(join(films, 'Arrival (2016)', 'artwork.png'));
+  file(join(films, 'Arrival (2016)', 'readme.nfo'));
+  file(join(films, 'IMG_20240102_120000.mp4'));
+  file(join(films, 'Arrival (2016)', 'Sample', 'a-clip.mkv'));
+  // A feature-length film whose name happens to say "sample".
+  file(join(films, 'The Sample (2019) 1080p.mkv'), BIG);
+
+  db = await import('../src/db.js');
+  scanner = await import('../src/scanner/scan.js');
+  scanner.addLibrary({ path: tv, kind: 'tv' });
+  scanner.addLibrary({ path: films, kind: 'movie' });
+  stats = scanner.scanLibraries();
+});
+after(() => {
+  db.db.close();
+  rmSync(work, { recursive: true, force: true });
+});
+
+const paths = () => db.db.prepare('SELECT filename FROM files').all().map((r) => r.filename);
+
+test('only video files are indexed at all', () => {
+  const kept = paths();
+  assert.ok(!kept.some((n) => /\.(jpg|png|txt|nfo|srt)$/i.test(n)), kept.join(', '));
+});
+
+test('samples, trailers and phone clips are left out', () => {
+  const kept = paths();
+  for (const unwanted of [
+    'sample.mkv', 'Trailer.mkv', 'WhatsApp Video 2025-01-01 at 10.10.10.mp4',
+    'Dune Part Two (2024) 1080p-sample.mkv', 'Arrival.2016.teaser.mp4', 'IMG_20240102_120000.mp4',
+    'a-clip.mkv',
+  ]) {
+    assert.ok(!kept.includes(unwanted), `${unwanted} should not be in the library`);
+  }
+  assert.equal(stats.skipped, 7);
+});
+
+test('the episodes and films themselves are kept', () => {
+  const kept = paths();
+  assert.ok(kept.includes('Severance.S01E01.1080p.mkv'));
+  assert.ok(kept.includes('Dune Part Two (2024) 1080p.mkv'));
+  assert.ok(kept.includes('Arrival.2016.1080p.mkv'));
+  // The word "sample" inside a release name is part of the episode title.
+  assert.ok(kept.includes('Mrs_Fletcher_S01E02_Free_Sample_720p_WEBRip.mkv'));
+  assert.equal(stats.episodes, 2);
+});
+
+test('a folder with no video in it never becomes a show', () => {
+  const shows = db.db.prepare('SELECT title FROM shows').all().map((r) => r.title);
+  assert.deepEqual(shows.sort(), ['Mrs Fletcher', 'Severance']);
+});
+
+test('a feature-length file called "sample" is still a film', () => {
+  // Size decides: a clip is small, so the name alone never loses a real film.
+  assert.ok(paths().includes('The Sample (2019) 1080p.mkv'));
+});

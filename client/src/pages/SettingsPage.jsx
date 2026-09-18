@@ -56,8 +56,11 @@ export default function SettingsPage() {
     setMessage(null);
     try {
       const stats = await api.scan();
+      const skipped = stats.skipped
+        ? ` ${stats.skipped} clip${stats.skipped === 1 ? '' : 's'} left out.`
+        : '';
       setMessage({
-        text: `Scanned ${stats.files} files — ${stats.shows} shows and ${stats.movies} films in ${stats.durationMs} ms.`,
+        text: `Scanned ${stats.files} files — ${stats.shows} shows and ${stats.movies} films in ${stats.durationMs} ms.${skipped}`,
       });
       window.dispatchEvent(new CustomEvent('shelf:refresh'));
       await load();
