@@ -4,8 +4,8 @@
 //
 //   npm run icon
 //
-// The mark is the same amber "S" tile the app shows in its sidebar, set in the
-// bundled Archivo, with a strip of film-sprocket holes top and bottom. It is
+// The mark is what the app is: a shelf with things standing on it, one of them
+// a film case with sprocket holes. An amber tile, the app's own accent. It is
 // drawn on a canvas, which keeps the alpha channel and renders the same way
 // every run.
 const { app, BrowserWindow, nativeImage } = require('electron');
@@ -19,7 +19,7 @@ const FONT = path
   .join(ROOT, 'client/node_modules/@fontsource-variable/archivo/files/archivo-latin-wght-normal.woff2')
   .replace(/\\/g, '/');
 
-const draw = `(async () => { try {
+const draw = (simple) => `(async () => { try {
   const face = new FontFace('Archivo Icon', "url('file:///${FONT}')", { weight: '100 900' });
   document.fonts.add(await face.load());
 
@@ -53,37 +53,69 @@ const draw = `(async () => { try {
   g.fillStyle = bottom;
   g.fillRect(0, S - inset - 90, S, 90);
 
-  // Sprocket holes.
-  g.fillStyle = 'rgba(20,16,10,.26)';
-  const holes = 7, hw = 58, hh = 34, left = 166, right = S - 166;
-  const step = (right - left - hw) / (holes - 1);
-  for (const y of [inset + 51, S - inset - 51 - hh]) {
-    for (let i = 0; i < holes; i++) {
-      g.beginPath();
-      g.roundRect(left + i * step, y, hw, hh, 9);
-      g.fill();
+  const INK = '#14100A';
+  const SHELF_Y = 726;      // top of the plank: everything stands on this line
+  const PLANK_H = 60;
+
+  // Four things on a shelf. The second is a film case, which is what makes the
+  // mark say "films and series" and not "books".
+  // At 16 and 24 pixels the detailed mark turns to mush, so those sizes get a
+  // simpler one: three chunky cases, wide gaps, no sprocket holes.
+  const spines = ${simple}
+    ? [
+        { x: 236, w: 156, h: 320, lean: 0, film: false },
+        { x: 428, w: 172, h: 430, lean: 0, film: false },
+        { x: 636, w: 156, h: 360, lean: 0, film: false },
+      ]
+    : [
+        { x: 252, w: 104, h: 300, lean: 0, film: false },
+        { x: 374, w: 136, h: 384, lean: 0, film: true },
+        { x: 528, w: 104, h: 330, lean: 0, film: false },
+        { x: 650, w: 104, h: 338, lean: 9, film: false },
+      ];
+
+  g.fillStyle = INK;
+  for (const s of spines) {
+    g.save();
+    if (s.lean) {
+      // Lean it on its bottom-right corner, the way a case slumps on a shelf.
+      g.translate(s.x + s.w, SHELF_Y);
+      g.rotate((s.lean * Math.PI) / 180);
+      g.translate(-(s.x + s.w), -SHELF_Y);
     }
+    g.beginPath();
+    g.roundRect(s.x, SHELF_Y - s.h, s.w, s.h, 16);
+    g.fill();
+    if (s.film) {
+      // Sprocket holes in the tile's own amber, so they read as holes in a
+      // film case rather than holes in the icon.
+      g.fillStyle = base;
+      const hw = 34, hh = 26, cx = s.x + s.w / 2 - hw / 2;
+      for (let i = 0; i < 4; i++) {
+        g.beginPath();
+        g.roundRect(cx, SHELF_Y - s.h + 52 + i * 62, hw, hh, 7);
+        g.fill();
+      }
+      g.fillStyle = INK;
+    }
+    g.restore();
   }
 
-  // The S, centred on its ink bounds rather than the font's line box.
-  g.fillStyle = '#14100A';
-  g.font = "900 640px 'Archivo Icon'";
-  g.textAlign = 'center';
-  g.textBaseline = 'alphabetic';
-  const m = g.measureText('S');
-  const inkH = m.actualBoundingBoxAscent + m.actualBoundingBoxDescent;
-  const inkW = m.actualBoundingBoxLeft + m.actualBoundingBoxRight;
-  const x = S / 2 + (m.actualBoundingBoxLeft - m.actualBoundingBoxRight) / 2;
-  const y = S / 2 + inkH / 2 - m.actualBoundingBoxDescent;
-  g.fillText('S', x, y);
-  g.restore();
+  // The plank itself, drawn last so the spines meet it cleanly.
+  g.fillStyle = INK;
+  const plankX = ${simple} ? 180 : 196;
+  g.beginPath();
+  g.roundRect(plankX, SHELF_Y, S - plankX * 2, ${simple} ? 86 : PLANK_H, 18);
+  g.fill();
 
-  return { png: c.toDataURL('image/png'), fontOk: document.fonts.check("900 100px 'Archivo Icon'"), inkW, inkH };
+  return { png: c.toDataURL('image/png'), fontOk: true };
 } catch (e) { return { error: String(e) }; } })()`;
 
-function ico(image) {
+function ico(detailed, simple) {
   const sizes = [16, 24, 32, 48, 64, 128, 256];
-  const pngs = sizes.map((s) => image.resize({ width: s, height: s, quality: 'best' }).toPNG());
+  const pngs = sizes.map((s) =>
+    (s <= 24 ? simple : detailed).resize({ width: s, height: s, quality: 'best' }).toPNG()
+  );
   const header = Buffer.alloc(6 + 16 * sizes.length);
   header.writeUInt16LE(0, 0); // reserved
   header.writeUInt16LE(1, 2); // type: icon
@@ -109,9 +141,10 @@ app.whenReady().then(async () => {
     fs.writeFileSync(page, '<!doctype html><meta charset="utf-8">');
     const win = new BrowserWindow({ show: false });
     await win.loadFile(page);
-    const { png, fontOk, inkW, inkH, error } = await win.webContents.executeJavaScript(draw);
+    const { png, error } = await win.webContents.executeJavaScript(draw(false));
     if (error) throw new Error(error);
-    if (!fontOk) throw new Error('Archivo did not load; run `npm run setup` first');
+    const small = await win.webContents.executeJavaScript(draw(true));
+    if (small.error) throw new Error(small.error);
 
     const image = nativeImage.createFromDataURL(png);
     const { width } = image.getSize();
@@ -122,9 +155,9 @@ app.whenReady().then(async () => {
 
     fs.mkdirSync(path.dirname(OUT), { recursive: true });
     fs.writeFileSync(OUT, image.toPNG());
-    const icon = ico(image);
+    const icon = ico(image, nativeImage.createFromDataURL(small.png));
     fs.writeFileSync(OUT.replace(/\.png$/, '.ico'), icon.buffer);
-    console.log(`icon -> build/icon.png (${SIZE}px, S ink ${Math.round(inkW)}x${Math.round(inkH)})`);
+    console.log(`icon -> build/icon.png (${SIZE}px)`);
     console.log(`icon -> build/icon.ico (${icon.sizes.join(', ')})`);
   } catch (err) {
     console.error('make-icon failed:', err);

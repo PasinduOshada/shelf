@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A question about using Shelf
+    url: https://github.com/PasinduOshada/shelf/discussions
+    about: Ask here rather than opening an issue.

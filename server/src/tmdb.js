@@ -22,6 +22,22 @@ export function hasApiKey() {
 
 class TmdbAuthError extends Error {}
 
+// Codes that mean "the network did not work", as opposed to "TMDB does not
+// have this title". The difference matters: one is worth remembering, the
+// other will be untrue as soon as the connection comes back.
+const OFFLINE_CODES = new Set([
+  'ENOTFOUND', 'EAI_AGAIN', 'ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT',
+  'ENETUNREACH', 'EHOSTUNREACH', 'EPIPE',
+  'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_SOCKET',
+]);
+
+/** Did this fail because there is no connection, rather than no such title? */
+export function isOffline(err) {
+  if (!err) return false;
+  if (err.name === 'TimeoutError' || err.name === 'AbortError') return true;
+  return OFFLINE_CODES.has(err.cause?.code) || OFFLINE_CODES.has(err.code);
+}
+
 /**
  * TMDB hands out two credentials and people paste either: the short v3 "API
  * Key" (query parameter) or the long v4 "Read Access Token" (a JWT, sent as a
@@ -54,7 +70,10 @@ async function tmdb(path, params = {}, attempt = 0) {
 
   let res;
   try {
-    res = await fetch(url, { headers: { accept: 'application/json', ...auth.headers } });
+    res = await fetch(url, {
+      headers: { accept: 'application/json', ...auth.headers },
+      signal: AbortSignal.timeout(15_000),
+    });
   } catch (err) {
     if (attempt < 2) {
       await sleep(800 * (attempt + 1));
@@ -80,7 +99,10 @@ export async function verifyApiKey(key) {
   // A reset connection says nothing about the key; retry before giving up.
   for (let attempt = 0; ; attempt++) {
     try {
-      const res = await fetch(url, { headers: { accept: 'application/json', ...auth.headers } });
+      const res = await fetch(url, {
+        headers: { accept: 'application/json', ...auth.headers },
+        signal: AbortSignal.timeout(15_000),
+      });
       return res.ok;
     } catch (err) {
       if (attempt >= 2) throw err;
@@ -603,7 +625,7 @@ export async function enrichAll({ onProgress = null, refresh = false } = {}) {
 
   const state = {
     mode: refresh ? 'refresh' : 'match',
-    total: shows.length + movies.length, done: 0, shows: 0, movies: 0, failed: 0, failures: [],
+    total: shows.length + movies.length, done: 0, shows: 0, movies: 0, failed: 0, offline: 0, failures: [],
   };
   const report = (current) => onProgress?.({ ...state, failures: [...state.failures], current });
 
@@ -621,10 +643,17 @@ export async function enrichAll({ onProgress = null, refresh = false } = {}) {
       }
     } catch (err) {
       if (err instanceof TmdbAuthError) throw err;
-      // A refresh that fails keeps the existing match; only new matches are marked failed.
-      if (!refresh) db.prepare(`UPDATE ${table} SET tmdb_status='failed' WHERE id=?`).run(row.id);
-      state.failed++;
-      if (state.failures.length < 200) state.failures.push(row.tmdb_title || row.title);
+      if (isOffline(err)) {
+        // No connection says nothing about the title. Leave it unmatched so
+        // the next run tries again, instead of writing off the whole library
+        // because the wifi dropped.
+        state.offline++;
+      } else {
+        // A refresh that fails keeps the existing match; only new matches are marked failed.
+        if (!refresh) db.prepare(`UPDATE ${table} SET tmdb_status='failed' WHERE id=?`).run(row.id);
+        state.failed++;
+        if (state.failures.length < 200) state.failures.push(row.tmdb_title || row.title);
+      }
     }
     state.done++;
   }
@@ -668,7 +697,7 @@ export function startEnrich({ retryFailed = false, refresh = false } = {}) {
 
   job = {
     running: true, mode: refresh ? 'refresh' : 'match',
-    done: 0, total: 0, shows: 0, movies: 0, failed: 0, failures: [],
+    done: 0, total: 0, shows: 0, movies: 0, failed: 0, offline: 0, failures: [],
     current: null, error: null, startedAt: new Date().toISOString(), finishedAt: null,
   };
 

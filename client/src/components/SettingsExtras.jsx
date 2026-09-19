@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api';
+import { api, formatBytes } from '../api';
 import { Badge, ProgressBar, SectionTitle } from './Bits';
 import { primaryBtn, ghostBtn } from './DetailHero';
 
@@ -408,6 +408,72 @@ export function Updates() {
             />
             Download updates automatically
           </label>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * What Shelf costs in disk. It should be small next to the library it
+ * describes, and anyone who wonders deserves a number rather than a promise.
+ */
+export function Storage() {
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [freed, setFreed] = useState(null);
+
+  const load = () => api.storage().then(setInfo).catch(() => {});
+  useEffect(() => {
+    load();
+  }, []);
+
+  async function tidy() {
+    setBusy(true);
+    try {
+      const result = await api.tidyStorage();
+      setInfo(result);
+      setFreed(result.freed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!info) return null;
+
+  return (
+    <section>
+      <SectionTitle>Disk used by Shelf</SectionTitle>
+      <div className="rounded-card border border-edge bg-surface/50 p-5">
+        <div className="flex flex-wrap items-baseline gap-x-8 gap-y-3">
+          <div>
+            <div className="display text-[32px] leading-none tnum text-ink">{formatBytes(info.total)}</div>
+            <div className="mono mt-1 text-[10px] uppercase tracking-wider text-ink-dim">In total</div>
+          </div>
+          <div className="mono text-[11.5px] text-ink-dim">
+            <div>{formatBytes(info.database)} library index and watch history</div>
+            <div>
+              {formatBytes(info.images)} artwork, {info.image_files} files
+            </div>
+            {info.uploads > 0 && <div>{formatBytes(info.uploads)} posters you uploaded</div>}
+          </div>
+        </div>
+
+        <p className="mt-4 max-w-[68ch] text-[12.5px] text-ink-dim">
+          Your videos are never copied — this is only the index, and artwork cached at the size
+          it is shown. Tidying removes artwork for titles no longer in your library and compacts
+          the database; nothing you have watched or rated is touched.
+        </p>
+
+        <div className="mt-4 flex items-center gap-3">
+          <button onClick={tidy} disabled={busy} className={ghostBtn}>
+            {busy ? 'Tidying' : 'Tidy up'}
+          </button>
+          {freed != null && (
+            <span className="text-[12.5px] text-ink-dim">
+              {freed > 0 ? `Gave back ${formatBytes(freed)}.` : 'Nothing to give back.'}
+            </span>
+          )}
         </div>
       </div>
     </section>

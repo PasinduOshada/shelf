@@ -7,7 +7,9 @@
 //
 // Env: SNAP_BASE (default http://localhost:5180), SNAP_OUT (default ./snaps),
 //      SNAP_W / SNAP_H (viewport), SNAP_WAIT (ms after load), SNAP_ROUTES
-//      ("name:/path,name:/path" -- {show} and {movie} are replaced with real ids).
+//      ("name:/path,name:/path" -- {show} and {movie} are replaced with real ids),
+//      SNAP_SCROLL (pixels to scroll first -- a window cannot be taller than the
+//      screen, so this is how to photograph something further down a page).
 const { app, BrowserWindow } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -17,6 +19,7 @@ const OUT = path.resolve(process.env.SNAP_OUT || path.join(__dirname, '..', 'sna
 const WIDTH = Number(process.env.SNAP_W) || 1440;
 const HEIGHT = Number(process.env.SNAP_H) || 1000;
 const WAIT = Number(process.env.SNAP_WAIT) || 1800;
+const SCROLL = Number(process.env.SNAP_SCROLL) || 0;
 
 const DEFAULT_ROUTES =
   'library:/,show:/show/{show},movie:/movie/{movie},upnext:/up-next,missing:/missing,' +
@@ -70,6 +73,10 @@ app.whenReady().then(async () => {
     for (const route of routes) {
       await win.loadURL(BASE + route.url);
       await sleep(WAIT);
+      if (SCROLL) {
+        await win.webContents.executeJavaScript(`window.scrollTo(0, ${SCROLL})`);
+        await sleep(600);
+      }
 
       let image = await win.webContents.capturePage();
       if (image.isEmpty()) {

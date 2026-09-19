@@ -133,3 +133,14 @@ test('specials never lead the "watch next" queue', async () => {
   assert.equal(next.season_number, 1, 'a special was offered before season 1');
   assert.equal(next.episode_number, 1, 'wrong episode offered');
 });
+
+test('a week with nothing watched counts zero, not null', async () => {
+  // SUM() over no rows is NULL in SQLite, which reached the screen as
+  // "null episodes - null films".
+  const stats = await import('../src/stats.js');
+  const week = stats.summaries().week;
+  assert.equal(week.episodes, 0);
+  assert.equal(week.movies, 0);
+  assert.equal(week.items, 0);
+  assert.equal(week.hours, 0);
+});

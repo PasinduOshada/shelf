@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { db, setSetting } from '../db.js';
 import { scanLibraries } from '../scanner/scan.js';
 import { duplicateGroups, trashDuplicate } from '../duplicates.js';
+import { storageReport, tidyStorage } from '../storage.js';
 import { probeStatus, startProbe } from '../mediainfo.js';
 import { airingToday, airedBetween, airingEnabled } from '../airing.js';
 import { autoSubtitleStatus, setAutoSubtitles, fetchSubtitlesFor } from '../autoSubtitles.js';
@@ -31,6 +32,11 @@ const handle = (fn) => async (req, res) => {
 // ---------------------------------------------------------------- duplicates
 
 router.get('/duplicates/groups', handle(() => duplicateGroups()));
+
+// ---------------------------------------------------------------- storage
+
+router.get('/storage', handle(() => storageReport()));
+router.post('/storage/tidy', handle(() => tidyStorage()));
 
 router.post('/files/:id/trash', handle(async (req) => {
   if (req.body?.confirm !== true) throw Object.assign(new Error('confirm: true is required'), { status: 400 });

@@ -119,6 +119,8 @@ export const api = {
     req(`/files/${fileId}/episode`, { method: 'PATCH', body: { season, episode } }),
 
   duplicateGroups: () => req('/duplicates/groups'),
+  storage: () => req('/storage'),
+  tidyStorage: () => req('/storage/tidy', { method: 'POST' }),
   // Sends one copy to the Recycle Bin; the server refuses the last copy.
   trashFile: (fileId) => req(`/files/${fileId}/trash`, { method: 'POST', body: { confirm: true } }),
 

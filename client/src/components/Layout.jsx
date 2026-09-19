@@ -5,6 +5,7 @@ import { Spinner } from './Bits';
 import { applyTheme } from '../themes';
 import { Toaster } from './MediaActions';
 import CommandPalette from './CommandPalette';
+import Mark from './Mark';
 
 const NAV = [
   { to: '/', label: 'Library', end: true, key: 'l' },
@@ -30,8 +31,8 @@ const typing = (el) => el && (el.isContentEditable || /^(input|textarea|select)$
 function Brand() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="grid h-7 w-7 place-items-center rounded bg-accent font-display text-[13px] font-black text-accent-ink">
-        S
+      <div className="grid h-7 w-7 place-items-center rounded bg-accent text-accent-ink">
+        <Mark className="h-[18px] w-[18px]" />
       </div>
       <div className="display text-[15px] uppercase tracking-[0.08em]">Shelf</div>
     </div>

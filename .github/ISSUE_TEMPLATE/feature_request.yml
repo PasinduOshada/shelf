@@ -1,0 +1,29 @@
+name: An idea
+description: Something Shelf should do, or should do differently.
+labels: [idea]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: >
+        The problem, rather than the solution. "I re-download episodes I already have"
+        tells us more than "add a duplicate column".
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you had in mind
+      description: If you already have a shape in mind, describe it. Rough is fine.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Does it fit Shelf
+      description: >
+        Shelf keeps to one job: your own files, on your own computer, with no account.
+      options:
+        - label: This works without an account or a server
+        - label: This works offline, or degrades gracefully without a connection

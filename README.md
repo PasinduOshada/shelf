@@ -1,13 +1,42 @@
+<div align="center">
+
+<img src="build/icon.png" alt="" width="104">
+
 # Shelf
 
-A local-first tracker for the TV and movie library you already have on disk.
+**A local-first tracker for the TV and film library you already have on disk.**
+
+No account. No cloud. No ads. Nothing leaves your computer.
+
+[Download for Windows](../../releases/latest) ·
+[What it does](#what-it-does) ·
+[Organizer](#organize-your-files) ·
+[Buy me a coffee](https://ko-fi.com/picklerobot)
+
+<img src="docs/screenshots/library.jpg" alt="The Shelf library: posters, what you are part way through, and how much space each series takes" width="900">
+
+</div>
 
 Most trackers know what you *watched*. Shelf also knows what you **own** — so it can
 tell you that you're missing `From S04E05–E06`, that three files are fighting over
 `Spider-Man S01E00`, and that Vikings is quietly eating 19 GB.
 
-No account. No cloud. No ads. Your files are never moved or renamed unless you preview and
-approve it in the organiser.
+Your files are never moved or renamed unless you preview and approve it in the organiser.
+
+### Organize your files
+
+Point it at a downloads folder. It works out what each video is from its name, shows you
+exactly where every file would go, and moves only what you tick. Every batch can be undone.
+
+<img src="docs/screenshots/organize.jpg" alt="The organizer previewing five downloads, each with the tidy path it would move to" width="900">
+
+### Know what you have, and what is missing
+
+<img src="docs/screenshots/show.jpg" alt="A series page: seasons, episodes on disk, what has been watched, file quality and size" width="900">
+
+### See where the hours went
+
+<img src="docs/screenshots/stats.jpg" alt="Viewing statistics: hours watched, a 90 day chart, this week and this month, and hours by week" width="900">
 
 ## What it does
 
@@ -86,6 +115,23 @@ approve it in the organiser.
 - Titles without artwork get a generated poster (their own hue, a monogram, film grain)
   rather than a grey box
 
+## Offline, and small
+
+**Shelf works with the network unplugged.** Scanning, organizing, renaming, tracking what you
+have watched, statistics, backups — all of it is local, and none of it waits on a connection.
+TMDB adds artwork, official titles and episode names; lose the connection and you lose those,
+nothing else. Titles that could not be looked up are left to try again rather than written
+off, so an outage never poisons the library, and every outbound call has a deadline so a
+half-open connection cannot hang the app. There is a test that runs the whole thing with
+every network call failing: `server/test/offline.test.mjs`.
+
+**It stays small.** Your videos are never copied or moved except by the organizer, when you
+approve it. What Shelf keeps is the index, plus artwork cached at the size it is shown —
+posters at 342px, backdrops at 780px, nothing larger. A library of 18 titles and 85 files
+costs about **1.5 MB**: roughly 700 KB of index and 800 KB of artwork. **Settings → Disk used
+by Shelf** shows the real number and gives back what it can: artwork for titles you no longer
+have, and the database's own slack.
+
 ## Requirements
 
 Node.js 22.5+ (uses the built-in `node:sqlite` — no native modules, no build tools).
@@ -135,11 +181,11 @@ ephemeral port and points a window at it.
 
 ```bash
 npm start          # run the desktop app
-npm run dist       # build installers into dist-desktop/
+npm run dist       # build installers into dist-desktop/, with checksums
 ```
 
 On Windows that produces `Shelf Setup 0.1.0.exe` (installer) and `Shelf 0.1.0.exe` (portable),
-~100 MB each. The build is unsigned, so SmartScreen will warn on first run.
+~120 MB each, plus `SHA256SUMS.txt` and `RELEASE-NOTES.md` to go with the release.
 
 The desktop build keeps its database and uploaded posters in `%APPDATA%/Shelf/`, entirely
 separate from the dev server's `server/data/`. A fresh install opens a short setup guide:
@@ -150,6 +196,25 @@ Shelf mark by `npm run icon`, so to change the icon, edit `scripts/make-icon.cjs
 
 > Electron 42 bundles Node 24, which is what makes the built-in `node:sqlite` work. Electron 33
 > and older bundle Node 20 and will fail to start.
+
+### Installing on Windows
+
+**Windows will say "Windows protected your PC" the first time you run Shelf.** Click
+**More info**, then **Run anyway**.
+
+That warning means the file is unsigned, not that anything is wrong with it. A code signing
+certificate costs more per year than this project takes in donations, and Shelf is free and
+staying free, so the certificate is not a good use of anyone's money.
+
+What you get instead is a checksum for every file. Compare the one you downloaded against
+`SHA256SUMS.txt` on the release:
+
+```powershell
+Get-FileHash "Shelf Setup 0.1.0.exe" -Algorithm SHA256
+```
+
+If the hash matches, the file is exactly what was built from this repository. If it does not,
+delete it and download again from the releases page — never from anywhere else.
 
 ## Development
 

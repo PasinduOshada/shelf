@@ -89,6 +89,7 @@ async function ensureFresh() {
   if (!c.token) throw new TraktError('Connect your Trakt account first', 401);
   if (!c.expiresAt || Date.now() < c.expiresAt - 24 * 3600_000) return;
   const res = await fetch(`${API}/oauth/token`, {
+    signal: AbortSignal.timeout(20_000),
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

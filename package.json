@@ -4,6 +4,28 @@
   "version": "0.1.0",
   "description": "Local-first tracker for the TV and movie library you already have on disk",
   "author": "Pasindu Oshada",
+  "homepage": "https://github.com/PasinduOshada/shelf",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PasinduOshada/shelf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PasinduOshada/shelf/issues"
+  },
+  "keywords": [
+    "tv-tracker",
+    "media-library",
+    "movie-tracker",
+    "episode-tracker",
+    "media-organizer",
+    "file-renamer",
+    "local-first",
+    "offline",
+    "electron",
+    "tmdb",
+    "self-hosted",
+    "watchlist"
+  ],
   "license": "MIT",
   "main": "main.js",
   "scripts": {
@@ -12,9 +34,10 @@
     "dev:client": "npm --prefix client run dev",
     "build:client": "npm --prefix client run build",
     "start": "npm run build:client && electron .",
-    "dist": "npm run build:client && electron-builder",
+    "dist": "npm run build:client && electron-builder && node scripts/checksums.cjs",
     "icon": "electron scripts/make-icon.cjs",
-    "licenses": "node scripts/licenses.cjs"
+    "licenses": "node scripts/licenses.cjs",
+    "checksums": "node scripts/checksums.cjs"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",

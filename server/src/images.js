@@ -3,11 +3,12 @@
 // Posters are fetched from image.tmdb.org once and kept on disk, so a library
 // that has been matched keeps its artwork with no network -- the desktop build
 // has to work standalone.
-import { createWriteStream, existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { DATA_DIR } from './paths.js';
+import { db } from './db.js';
 
 export const IMAGE_CACHE_DIR = process.env.SHELF_IMAGE_CACHE_DIR
   ? resolve(process.env.SHELF_IMAGE_CACHE_DIR)
@@ -80,4 +81,75 @@ export async function cacheImage(size, tmdbPath) {
 
   inflight.set(key, download);
   return download;
+}
+
+/** What the cache currently costs, in files and bytes. */
+export function cacheSize() {
+  let files = 0;
+  let bytes = 0;
+  for (const size of SIZES) {
+    const dir = join(IMAGE_CACHE_DIR, size);
+    let names;
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      try {
+        bytes += statSync(join(dir, name)).size;
+        files++;
+      } catch {
+        // Gone between listing and asking: nothing to count.
+      }
+    }
+  }
+  return { files, bytes };
+}
+
+/**
+ * Delete artwork nothing refers to any more: posters of titles that were
+ * removed, and everything an older match left behind. Keeping them costs disk
+ * for pictures no screen will ever ask for again.
+ */
+export function pruneImageCache() {
+  const wanted = new Set();
+  const add = (path) => {
+    if (path) wanted.add(String(path).replace(/^\//, ''));
+  };
+  for (const sql of [
+    'SELECT poster_path AS p, backdrop_path AS b FROM shows',
+    'SELECT poster_path AS p, backdrop_path AS b FROM movies',
+    'SELECT poster_path AS p, NULL AS b FROM seasons',
+    'SELECT still_path AS p, NULL AS b FROM episodes',
+  ]) {
+    for (const row of db.prepare(sql).all()) {
+      add(row.p);
+      add(row.b);
+    }
+  }
+
+  let removed = 0;
+  let bytes = 0;
+  for (const size of SIZES) {
+    const dir = join(IMAGE_CACHE_DIR, size);
+    let names;
+    try {
+      names = readdirSync(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      if (wanted.has(name)) continue;
+      const file = join(dir, name);
+      try {
+        bytes += statSync(file).size;
+        rmSync(file);
+        removed++;
+      } catch {
+        // Already gone.
+      }
+    }
+  }
+  return { removed, bytes };
 }

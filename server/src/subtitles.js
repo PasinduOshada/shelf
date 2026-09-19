@@ -314,7 +314,10 @@ export async function downloadSubtitle(target, { subtitleFileId, language }) {
   if (link.protocol !== 'https:' || !/(^|\.)opensubtitles\.(com|org)$/i.test(link.hostname)) {
     throw new SubtitleError('Unexpected download location', 502);
   }
-  const res = await fetch(link, { headers: { 'User-Agent': USER_AGENT } });
+  const res = await fetch(link, {
+    headers: { 'User-Agent': USER_AGENT },
+    signal: AbortSignal.timeout(30_000),
+  });
   if (!res.ok) throw new SubtitleError(`Download failed (${res.status})`, 502);
   const bytes = Buffer.from(await res.arrayBuffer());
   if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new SubtitleError('The subtitle file looks wrong', 502);

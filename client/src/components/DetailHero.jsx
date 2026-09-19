@@ -33,7 +33,9 @@ export default function DetailHero({
   posterSlot,
   titleAddon,
 }) {
-  const backdrop = tmdbImg(backdropPath, 'w1280');
+  // w780 behind a blur and a gradient looks the same as w1280 and costs a
+  // third of the disk.
+  const backdrop = tmdbImg(backdropPath, 'w780');
   const h = titleHue(title);
 
   return (

@@ -423,6 +423,13 @@ export function scanLibraries({ libraryId = null } = {}) {
   });
 
   isHidden = nothingHidden;
+  // Fold the write-ahead log back in. A scan writes a lot at once, and the log
+  // otherwise stays as large as the busiest scan for the rest of the session.
+  try {
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+  } catch {
+    // Something else is reading; it will fold in later.
+  }
   stats.durationMs = Date.now() - started;
   return stats;
 }

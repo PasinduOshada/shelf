@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import Mark from '../components/Mark';
 import { Link, useNavigate } from 'react-router-dom';
 import { api, plural } from '../api';
 import { Badge, ProgressBar, Spinner } from '../components/Bits';
@@ -159,8 +160,8 @@ export default function WelcomePage() {
       <div className="relative mx-auto grid max-w-6xl gap-14 px-8 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:items-center">
         <header>
           <div className="flex items-center gap-2.5">
-            <div className="grid h-9 w-9 place-items-center rounded bg-accent font-display text-[16px] font-black text-accent-ink">
-              S
+            <div className="grid h-9 w-9 place-items-center rounded bg-accent text-accent-ink">
+              <Mark className="h-6 w-6" />
             </div>
             <div className="display text-[18px] uppercase tracking-[0.08em] text-ink">Shelf</div>
           </div>

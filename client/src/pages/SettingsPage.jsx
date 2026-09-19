@@ -5,7 +5,7 @@ import { primaryBtn, ghostBtn } from '../components/DetailHero';
 import ThemePanel from '../components/ThemePanel';
 import FolderPicker from '../components/FolderPicker';
 import { PlayerSettings, SubtitleSettings } from '../components/MediaSettings';
-import { LibraryCare, ImportSync, BackupRestore, Updates } from '../components/SettingsExtras';
+import { LibraryCare, ImportSync, BackupRestore, Updates, Storage } from '../components/SettingsExtras';
 import About from '../components/About';
 
 export default function SettingsPage() {
@@ -347,6 +347,8 @@ export default function SettingsPage() {
         <BackupRestore />
 
         <Updates />
+
+        <Storage />
 
         <section>
           <SectionTitle>Ignored folders</SectionTitle>

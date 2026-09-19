@@ -75,8 +75,9 @@ export function summaries() {
       SELECT COUNT(*) items,
              COALESCE(SUM(minutes),0) minutes,
              COUNT(DISTINCT show_id) shows,
-             SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END) movies,
-             SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END) episodes
+             -- SUM over no rows is NULL, and a quiet week has no rows.
+             COALESCE(SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END), 0) movies,
+             COALESCE(SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END), 0) episodes
       FROM watch_history
       WHERE watched_at >= ${fromSql} ${toSql ? `AND watched_at < ${toSql}` : ''}
     `).get();

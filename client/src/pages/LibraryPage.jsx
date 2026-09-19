@@ -25,7 +25,7 @@ const SORTS = [
 /* ---- hero ---------------------------------------------------------- */
 
 function Hero({ item, onWatched, busy }) {
-  const backdrop = tmdbImg(item.backdrop_path, 'w1280');
+  const backdrop = tmdbImg(item.backdrop_path, 'w780');
   const art = posterUrl(item.poster, 'w780');
   const h = titleHue(item.title);
 

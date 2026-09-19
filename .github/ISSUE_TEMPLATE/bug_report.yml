@@ -1,0 +1,65 @@
+name: Something is wrong
+description: A file matched the wrong title, the app crashed, a button did nothing.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Shelf reads your files but never sends them anywhere, so nobody can see what you
+        see. The more of it you can paste here, the faster this gets fixed.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Shelf did instead.
+      placeholder: |
+        I scanned E:\Media\TV Series and "The Bear" came out as three separate shows.
+    validations:
+      required: true
+
+  - type: textarea
+    id: filenames
+    attributes:
+      label: The file names involved
+      description: >
+        If a title matched wrongly, the exact file and folder names matter more than
+        anything else — that is all Shelf has to work from.
+      render: text
+      placeholder: |
+        The.Bear.S01E01.1080p.WEBRip.x264.mkv
+        the bear s01e02 1080p.mkv
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Shelf version
+      description: Settings, at the bottom, or the installer you ran.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: How are you running it
+      options:
+        - The installer
+        - The portable exe
+        - From source (npm run dev)
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots help. Drag them in.
