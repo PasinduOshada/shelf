@@ -116,6 +116,10 @@ they count in your statistics like anything else. Delete a download later and th
 stays; download it again and the title you were already following picks the files up
 rather than appearing twice.
 
+Without a TMDB key the Library opens as a plain list — name, folder or file, what you have
+watched, size — because a grid of empty poster frames tells you nothing. **Grid** and **List**
+sit beside the sort buttons, and whichever you pick is remembered.
+
 A scan only picks up video files that look like an episode or a film. Subtitles are noted
 beside their video; documents, artwork, music and archives are ignored outright; and
 release samples, trailers and phone or camera exports (`VID_20240102…`, WhatsApp

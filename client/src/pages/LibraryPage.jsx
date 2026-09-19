@@ -171,6 +171,103 @@ function MovieCard({ movie }) {
   );
 }
 
+/* ---- list view ------------------------------------------------------ */
+
+const ROW = 'grid items-center gap-4 border-b border-edge/50 px-3 py-2 last:border-b-0 transition-colors';
+// A phone has room for the name and one figure; hiding a cell is not enough,
+// its column has to go with it.
+const COLS =
+  'grid-cols-[minmax(0,1fr)_5rem] sm:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_5.5rem_6.5rem]';
+const MIDDLE = 'hidden sm:block';
+
+function ListHeader({ columns }) {
+  return (
+    <div className={`${ROW} ${COLS} mono border-edge text-[10px] uppercase tracking-wider text-ink-dim`}>
+      {columns.map((c, i) => (
+        <span
+          key={c}
+          className={`${i === 1 || i === 2 ? MIDDLE : ''} ${i > 1 ? 'text-right' : ''}`}
+        >
+          {c}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ShowRow({ show }) {
+  return (
+    <Link to={`/show/${show.id}`} className={`${ROW} ${COLS} hover:bg-surface`}>
+      <span className="flex min-w-0 items-center gap-2">
+        {show.is_favorite ? <span className="shrink-0 text-[11px] text-accent">★</span> : null}
+        <span className="truncate text-[13px] text-ink">{show.title}</span>
+        {show.year ? <span className="mono shrink-0 text-[10.5px] text-ink-dim">{show.year}</span> : null}
+      </span>
+      <span className="mono hidden truncate text-[11px] text-ink-dim sm:block" title={show.folder_path || ''}>
+        {show.folder_name || 'Tracking'}
+      </span>
+      <span className={`mono text-right text-[11px] text-ink-dim ${MIDDLE}`}>
+        {show.owned_episodes ? `${show.watched_episodes}/${show.owned_episodes}` : '—'}
+      </span>
+      <span className="mono text-right text-[11px] text-ink-dim">
+        {show.owned_episodes ? formatBytes(show.size_bytes) : 'tracking'}
+      </span>
+    </Link>
+  );
+}
+
+function MovieRow({ movie }) {
+  const file = movie.file_path ? movie.file_path.split(/[\\/]/).pop() : '';
+  return (
+    <Link to={`/movie/${movie.id}`} className={`${ROW} ${COLS} hover:bg-surface`}>
+      <span className="flex min-w-0 items-center gap-2">
+        <span className={`shrink-0 text-[11px] ${movie.watched ? 'text-accent' : 'text-transparent'}`}>✓</span>
+        {movie.is_favorite ? <span className="shrink-0 text-[11px] text-accent">★</span> : null}
+        <span className="truncate text-[13px] text-ink">{movie.title}</span>
+        {movie.year ? <span className="mono shrink-0 text-[10.5px] text-ink-dim">{movie.year}</span> : null}
+      </span>
+      <span className="mono hidden truncate text-[11px] text-ink-dim sm:block" title={movie.file_path || ''}>
+        {file || 'Tracking'}
+      </span>
+      <span className={`mono text-right text-[11px] text-ink-dim ${MIDDLE}`}>{movie.quality || '—'}</span>
+      <span className="mono text-right text-[11px] text-ink-dim">
+        {movie.file_count ? formatBytes(movie.size_bytes) : 'tracking'}
+      </span>
+    </Link>
+  );
+}
+
+/** The next episode, on one line, for people who did not come for posters. */
+function ContinueLine({ item, onWatched, busy }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card border border-edge bg-surface/50 px-4 py-2.5">
+      <span className="mono text-[10px] uppercase tracking-wider text-accent">Continue</span>
+      <Link to={`/show/${item.show_id}`} className="min-w-0 truncate text-[13px] text-ink hover:text-accent">
+        {item.title}
+      </Link>
+      <span className="mono text-[11px] text-ink-dim">
+        {episodeLabel(item.season_number, item.episode_number)}
+      </span>
+      <div className="ml-auto flex items-center gap-2">
+        <PlayButton
+          target={{ episodeId: item.episode_id }}
+          label={`${item.title} ${episodeLabel(item.season_number, item.episode_number)}`}
+          className="!px-3 !py-1 !text-[10px]"
+        >
+          Play
+        </PlayButton>
+        <button
+          onClick={onWatched}
+          disabled={busy}
+          className="rounded border border-edge px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider text-ink-dim transition hover:border-accent/50 hover:text-ink disabled:opacity-50"
+        >
+          Watched
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---- page ---------------------------------------------------------- */
 
 export default function LibraryPage() {
@@ -188,6 +285,9 @@ export default function LibraryPage() {
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [tmdbReady, setTmdbReady] = useState(false);
+  // '' until someone picks: with no artwork to show, a plain list reads better
+  // than a grid of empty boxes.
+  const [chosenView, setChosenView] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -206,8 +306,21 @@ export default function LibraryPage() {
   }
 
   useEffect(() => {
-    api.settings().then((s) => setTmdbReady(Boolean(s.tmdbConfigured))).catch(() => {});
+    api
+      .settings()
+      .then((s) => {
+        setTmdbReady(Boolean(s.tmdbConfigured));
+        setChosenView(s.view || '');
+      })
+      .catch(() => setChosenView(''));
   }, []);
+
+  const view = chosenView || (tmdbReady ? 'grid' : 'list');
+
+  function pickView(next) {
+    setChosenView(next);
+    api.updateSettings({ view: next }).catch(() => {});
+  }
 
   useEffect(() => {
     load();
@@ -251,7 +364,13 @@ export default function LibraryPage() {
           }}
         />
       )}
-      {hero && !search && <Hero item={hero} onWatched={markHeroWatched} busy={busy} />}
+      {hero && !search && (
+        view === 'list' ? (
+          <ContinueLine item={hero} onWatched={markHeroWatched} busy={busy} />
+        ) : (
+          <Hero item={hero} onWatched={markHeroWatched} busy={busy} />
+        )
+      )}
 
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-5">
@@ -299,6 +418,23 @@ export default function LibraryPage() {
             ))}
           </div>
           <span className="mono text-[11px] text-ink-dim">{formatBytes(totalBytes)}</span>
+          <div className="flex items-center gap-1" role="group" aria-label="How to show the library">
+            {[
+              { id: 'grid', label: 'Grid' },
+              { id: 'list', label: 'List' },
+            ].map((v) => (
+              <button
+                key={v.id}
+                onClick={() => pickView(v.id)}
+                aria-pressed={view === v.id}
+                className={`rounded px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider transition ${
+                  view === v.id ? 'bg-accent/12 text-accent' : 'text-ink-dim hover:bg-surface hover:text-ink'
+                }`}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
           <div className="flex flex-wrap items-center gap-1">
             {SORTS.map((s) => (
               <button
@@ -366,6 +502,19 @@ export default function LibraryPage() {
             )
           }
         />
+      ) : view === 'list' ? (
+        <div className="rounded-card border border-edge bg-surface/40">
+          <ListHeader
+            columns={
+              tab === 'shows'
+                ? ['Show', 'Folder', 'Watched', 'Size']
+                : ['Film', 'File', 'Quality', 'Size']
+            }
+          />
+          {tab === 'shows'
+            ? shows.map((s) => <ShowRow key={s.id} show={s} />)
+            : movies.map((m) => <MovieRow key={m.id} movie={m} />)}
+        </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-4 gap-y-6">
           {tab === 'shows'

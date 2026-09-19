@@ -141,15 +141,18 @@ router.get('/settings', (_req, res) => {
     excludes: JSON.parse(getSetting('scan.excludes', '[]')),
     theme: getSetting('ui.theme', 'dark'),
     accent: getSetting('ui.accent', 'violet'),
+    // '' means nobody has chosen: the library decides from what it can show.
+    view: getSetting('ui.view', ''),
     tmdbConfigured: hasApiKey(),
   });
 });
 
 router.patch('/settings', (req, res) => {
-  const { excludes, theme, accent } = req.body || {};
+  const { excludes, theme, accent, view } = req.body || {};
   if (Array.isArray(excludes)) setSetting('scan.excludes', JSON.stringify(excludes));
   if (theme) setSetting('ui.theme', theme);
   if (accent) setSetting('ui.accent', accent);
+  if (['grid', 'list', ''].includes(view)) setSetting('ui.view', view);
   res.json({ ok: true });
 });
 
