@@ -8,6 +8,11 @@ import {
   isJunkName, isClipFile, SKIP_DIR, SAMPLE_DIR,
 } from './parse.js';
 
+// Folders that name a category rather than a title. "Documentaries" is a
+// shelf, not a programme: what stands in it stands on its own.
+const GROUPING_DIR =
+  /^(?:documentar(?:y|ies)|movies?|films?|shows?|tv(?:[\s._-]?(?:series|shows?))?|series|anime|cartoons?|kids|collections?|misc(?:ellaneous)?|various|other|stuff|new folder|videos?|media)$/i;
+
 const SEASON_DIR = /^(?:season|series|s)[\s._-]*(\d{1,3})$/i;
 const SPECIALS_DIR = /^(?:specials?|extras?)$/i;
 
@@ -80,23 +85,28 @@ function listFiles(dir) {
  * recursed into, so each nested series becomes its own show rather than all
  * of them collapsing into one with colliding episode numbers.
  */
-function collectShowRoots(dir, excludes, depth = 0) {
-  if (isExcluded(dir, excludes)) return [];
+function collectShowRoots(dir, excludes, out = { roots: [], groups: [] }, depth = 0) {
+  if (isExcluded(dir, excludes)) return out;
 
-  const roots = [];
   const subdirs = listDirs(dir);
   const hasSeasonDirs = subdirs.some(isSeasonDir);
   const hasDirectVideos = listFiles(dir).some(isVideoFile);
 
-  if (hasSeasonDirs || hasDirectVideos) roots.push(dir);
+  if (GROUPING_DIR.test(basename(dir))) {
+    // Never a title of its own. Anything loose in it is dealt with one file at
+    // a time; the folders inside it are found by the recursion below.
+    if (hasDirectVideos) out.groups.push(dir);
+  } else if (hasSeasonDirs || hasDirectVideos) {
+    out.roots.push(dir);
+  }
 
   if (depth < 2) {
     for (const d of subdirs) {
       if (isSeasonDir(d)) continue;
-      roots.push(...collectShowRoots(join(dir, d), excludes, depth + 1));
+      collectShowRoots(join(dir, d), excludes, out, depth + 1);
     }
   }
-  return roots;
+  return out;
 }
 
 /**
@@ -251,11 +261,75 @@ function recordFile(row) {
 
 const manualEpisode = db.prepare('SELECT manual_season, manual_episode FROM files WHERE path = ?');
 
-function scanTvLibrary(library, stats, excludes) {
-  const roots = [];
-  for (const folderName of listDirs(library.path)) {
-    roots.push(...collectShowRoots(join(library.path, folderName), excludes));
+/**
+ * Videos standing loose in a category folder. Each is its own title: a single
+ * documentary is a film, and loose episodes belong to whatever series their
+ * own names give, not to the folder they happen to share.
+ */
+function scanGroupFolder(library, dir, stats, excludes) {
+  const series = new Map();
+
+  for (const filename of listFiles(dir).sort()) {
+    if (!isVideoFile(filename)) {
+      if (isSubtitleFile(filename)) stats.subtitles++;
+      continue;
+    }
+    const path = join(dir, filename);
+    if (isExcluded(path, excludes)) continue;
+    if (isNotLibraryMedia(path, filename)) {
+      stats.skipped++;
+      continue;
+    }
+
+    const parsed = parseFilename(filename);
+    if (parsed.isEpisode && parsed.season != null && parsed.title) {
+      const key = sortTitle(parsed.title);
+      if (!series.has(key)) series.set(key, { title: parsed.title, files: [] });
+      series.get(key).files.push({ path, filename, parsed });
+      continue;
+    }
+    if (!parsed.title) continue;
+
+    const movie = upsertMovie({
+      libraryId: library.id, collectionId: null, title: parsed.title, year: parsed.year,
+    });
+    recordFile({
+      path, filename, parentDir: dir, ext: parsed.ext, movieId: movie.id,
+      quality: parsed.quality, codec: parsed.codec, source: parsed.source,
+    });
+    stats.movies++;
+    stats.files++;
   }
+
+  for (const group of series.values()) {
+    // No folder of its own to be known by, so the first of its files serves as
+    // the show's identity. It is stable as long as that file is there.
+    const show = upsertShow({
+      libraryId: library.id,
+      folderPath: group.files[0].path,
+      folderName: group.title,
+    });
+    stats.shows++;
+    for (const { path, filename, parsed } of group.files) {
+      ensureSeason(show.id, parsed.season);
+      const episodeId = ensureEpisode(show.id, parsed.season, parsed.episode);
+      recordFile({
+        path, filename, parentDir: dir, ext: parsed.ext, showId: show.id, episodeId,
+        season: parsed.season, episode: parsed.episode,
+        quality: parsed.quality, codec: parsed.codec, source: parsed.source,
+      });
+      stats.episodes++;
+      stats.files++;
+    }
+  }
+}
+
+function scanTvLibrary(library, stats, excludes) {
+  const found = { roots: [], groups: [] };
+  for (const folderName of listDirs(library.path)) {
+    collectShowRoots(join(library.path, folderName), excludes, found);
+  }
+  const roots = found.roots;
   // Deepest first, so a file is claimed by the most specific show root.
   roots.sort((a, b) => b.length - a.length);
 
@@ -328,6 +402,9 @@ function scanTvLibrary(library, stats, excludes) {
       stats.files++;
     }
   }
+
+  // After the shows, so anything a real series claimed is already spoken for.
+  for (const dir of found.groups) scanGroupFolder(library, dir, stats, excludes);
 }
 
 function scanMovieLibrary(library, stats, excludes) {
@@ -423,6 +500,7 @@ export function scanLibraries({ libraryId = null } = {}) {
   });
 
   isHidden = nothingHidden;
+  pruneEmptyShows();
   // Fold the write-ahead log back in. A scan writes a lot at once, and the log
   // otherwise stays as large as the busiest scan for the rest of the session.
   try {
@@ -432,6 +510,31 @@ export function scanLibraries({ libraryId = null } = {}) {
   }
   stats.durationMs = Date.now() - started;
   return stats;
+}
+
+/**
+ * Remove shows left holding nothing: a folder that stopped being a title (a
+ * category folder, say) or one whose files all went elsewhere. Only debris
+ * goes - anything you followed, watched, rated or wrote a note on stays, as
+ * does any title you added yourself.
+ */
+function pruneEmptyShows() {
+  const dead = db.prepare(`
+    SELECT s.id, s.title FROM shows s
+    WHERE s.library_id IS NOT NULL
+      AND s.is_favorite = 0
+      AND s.user_status IS NULL AND s.user_rating IS NULL
+      AND (s.notes IS NULL OR s.notes = '')
+      AND NOT EXISTS (SELECT 1 FROM files f WHERE f.show_id = s.id)
+      AND NOT EXISTS (SELECT 1 FROM watch_history h WHERE h.show_id = s.id)
+      AND NOT EXISTS (SELECT 1 FROM episode_state e WHERE e.show_id = s.id AND (e.watched = 1 OR e.rating IS NOT NULL))
+  `).all();
+
+  if (!dead.length) return;
+  transaction(() => {
+    for (const show of dead) db.prepare('DELETE FROM shows WHERE id = ?').run(show.id);
+  });
+  return dead.length;
 }
 
 export function addLibrary({ path, kind, label = null }) {

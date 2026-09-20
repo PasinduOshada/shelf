@@ -144,3 +144,52 @@ test('a week with nothing watched counts zero, not null', async () => {
   assert.equal(week.items, 0);
   assert.equal(week.hours, 0);
 });
+
+test('a category folder is a shelf, not a title', async () => {
+  // Taken from a real library: "Documentaries" holding standalone films at the
+  // top and docuseries in their own folders. It became one show called
+  // "Documentaries" whose films hid inside it as extras.
+  const work = mkdtempSync(join(tmpdir(), 'shelf-group-'));
+  process.env.SHELF_DATA_DIR = join(work, 'data');
+  process.env.SHELF_DB_PATH = join(work, 'data', 'test.db');
+  mkdirSync(process.env.SHELF_DATA_DIR);
+
+  const tv = join(work, 'TV');
+  const docs = join(tv, 'Documentaries');
+  file(join(docs, 'Amanda.Knox.2016.720p.WEBRip.x264.mp4'));
+  file(join(docs, 'The.Tinder.Swindler.2022.720p.NF.WEBRip.x264.mkv'));
+  file(join(docs, 'Night Stalker', 'Night.Stalker.S01E01.1080p.mkv'));
+  file(join(docs, 'Night Stalker', 'Night.Stalker.S01E02.1080p.mkv'));
+  // Loose episodes in a category folder belong to their own series.
+  file(join(docs, 'Wild.Wild.Country.S01E01.1080p.mkv'));
+  file(join(docs, 'Wild.Wild.Country.S01E02.1080p.mkv'));
+  // A real show that happens to have loose episodes beside its season folders
+  // must keep working: the folder name is a title, not a category.
+  file(join(tv, 'Fargo', 'Fargo.S02E01.720p.mkv'));
+  file(join(tv, 'Fargo', 'Season 03', 'Fargo.S03E01.720p.mkv'));
+
+  const freshDb = await import(`../src/db.js?group=${Date.now()}`);
+  const freshScanner = await import(`../src/scanner/scan.js?group=${Date.now()}`);
+  freshScanner.addLibrary({ path: tv, kind: 'tv' });
+  freshScanner.scanLibraries();
+
+  const shows = freshDb.db.prepare('SELECT title FROM shows ORDER BY title').all().map((r) => r.title);
+  const films = freshDb.db.prepare('SELECT title FROM movies ORDER BY title').all().map((r) => r.title);
+
+  assert.ok(!shows.includes('Documentaries'), `"Documentaries" became a show: ${shows.join(', ')}`);
+  assert.ok(films.includes('Amanda Knox'), `the films are missing: ${films.join(', ')}`);
+  assert.ok(films.includes('The Tinder Swindler'), `the films are missing: ${films.join(', ')}`);
+  assert.ok(shows.includes('Night Stalker'), `a docuseries subfolder was lost: ${shows.join(', ')}`);
+  assert.ok(shows.includes('Wild Wild Country'), `loose episodes lost their series: ${shows.join(', ')}`);
+  assert.ok(shows.includes('Fargo'), 'a real show with loose episodes was broken');
+
+  const fargo = freshDb.db.prepare("SELECT id FROM shows WHERE title = 'Fargo'").get();
+  assert.equal(
+    freshDb.db.prepare('SELECT COUNT(*) c FROM files WHERE show_id = ?').get(fargo.id).c,
+    2,
+    'Fargo should keep both its loose episode and its season folder'
+  );
+
+  freshDb.db.close();
+  rmSync(work, { recursive: true, force: true });
+});
