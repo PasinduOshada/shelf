@@ -122,10 +122,13 @@ export function setShowWatched(showId, { season = null, watched = true } = {}) {
   const show = db.prepare('SELECT * FROM shows WHERE id = ?').get(showId);
   if (!show) return null;
 
+  // Everything that has aired, whether or not it is on this computer: people
+  // mark a series watched because they watched it, not because they kept the
+  // files. Episodes still to come are left alone.
   const eps = db.prepare(`
     SELECT e.* FROM episodes e
     WHERE e.show_id = ? ${season != null ? 'AND e.season_number = ?' : ''}
-      AND EXISTS (SELECT 1 FROM files f WHERE f.episode_id = e.id AND f.is_missing = 0)
+      AND (e.air_date IS NULL OR e.air_date <= date('now'))
   `).all(...(season != null ? [show.id, season] : [show.id]));
 
   transaction(() => {

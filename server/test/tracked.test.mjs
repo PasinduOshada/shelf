@@ -120,3 +120,41 @@ test('a title needs at least a name', async () => {
   await assert.rejects(() => tracked.addTracked({ kind: 'movie' }), /Give a title/);
   await assert.rejects(() => tracked.addTracked({ kind: 'book', title: 'x' }), /kind must be/);
 });
+
+test('a whole series can be marked watched with nothing on disk', async () => {
+  // The reason for the feature: a series you watched years ago, long before
+  // Shelf, and never had the files for.
+  const show = await tracked.addTracked({ kind: 'show', title: 'Twin Peaks', year: 1990 });
+  const seasons = [1, 2];
+  for (const season of seasons) {
+    for (let n = 1; n <= 3; n++) {
+      db.db.prepare(
+        `INSERT INTO episodes (id, show_id, season_number, episode_number, title, air_date)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(`tp-${season}-${n}`, show.id, season, n, `Episode ${n}`, '1990-04-08');
+    }
+  }
+  // One that has not aired yet, which must not be touched.
+  db.db.prepare(
+    `INSERT INTO episodes (id, show_id, season_number, episode_number, title, air_date)
+     VALUES ('tp-future', ?, 3, 1, 'Not yet', date('now', '+30 days'))`
+  ).run(show.id);
+
+  watch.setShowWatched(show.id, { watched: true });
+
+  const watched = db.db.prepare('SELECT episode_id FROM episode_state WHERE show_id = ? AND watched = 1').all(show.id);
+  assert.equal(watched.length, 6, 'every aired episode should be marked');
+  assert.ok(!watched.some((r) => r.episode_id === 'tp-future'), 'an unaired episode was marked watched');
+  assert.equal(
+    db.db.prepare('SELECT COUNT(*) c FROM watch_history WHERE show_id = ?').get(show.id).c,
+    6,
+    'history should record all six'
+  );
+
+  watch.setShowWatched(show.id, { watched: false });
+  assert.equal(
+    db.db.prepare('SELECT COUNT(*) c FROM episode_state WHERE show_id = ? AND watched = 1').get(show.id).c,
+    0,
+    'clearing should leave nothing watched'
+  );
+});

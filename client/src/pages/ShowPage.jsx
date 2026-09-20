@@ -211,6 +211,16 @@ export default function ShowPage() {
 
   const toggleEpisode = (ep) => run(() => api.watchEpisode(ep.id, !ep.watched));
   const markSeason = (season, watched) => run(() => api.watchShow(id, { season, watched }));
+
+  /** Every season at once, for a series you watched long before Shelf existed. */
+  function markSeries(watched) {
+    const total = show.stats.total;
+    const what = watched
+      ? `Mark all ${plural(total, 'episode')} of ${show.title} as watched?`
+      : `Clear what you have watched of ${show.title}? That removes ${plural(show.stats.watched, 'episode')} from your history.`;
+    if (!confirm(what)) return;
+    run(() => api.watchShow(id, { watched }));
+  }
   const patch = (body) => run(() => api.updateShow(id, body));
 
   async function uploadPoster(e) {
@@ -440,6 +450,25 @@ export default function ShowPage() {
                   >
                     Clear
                   </button>
+                  <span className="text-[11px] text-ink-dim/50">|</span>
+                  <button
+                    onClick={() => markSeries(true)}
+                    disabled={busy || show.stats.watched === show.stats.total}
+                    className="text-[11px] text-accent transition hover:underline disabled:opacity-40"
+                    title={`Mark all ${show.seasons.length} seasons watched`}
+                  >
+                    Whole series
+                  </button>
+                  {show.stats.watched > 0 && (
+                    <button
+                      onClick={() => markSeries(false)}
+                      disabled={busy}
+                      className="text-[11px] text-ink-dim transition hover:text-ink disabled:opacity-40"
+                      title="Forget everything watched of this series"
+                    >
+                      Clear all
+                    </button>
+                  )}
                   {season.owned_count > 0 && (
                     <button
                       onClick={() => fetchSeasonSubtitles(season.season_number)}

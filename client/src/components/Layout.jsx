@@ -19,6 +19,7 @@ const NAV = [
 
 const SHORTCUTS = [
   ['Ctrl K', 'Jump to anything'],
+  ['Alt ←', 'Back (or the mouse back button)'],
   ['/', 'Search'],
   ['p', 'Play the next episode (on a show or film page)'],
   ['w', 'Mark the next episode watched (on a show or film page)'],
@@ -171,6 +172,39 @@ export default function Layout() {
     };
   }, []);
 
+  // There is no browser chrome in the desktop app, so the window has to offer
+  // its own way back. Router history carries an index; zero means this is where
+  // the session started.
+  const canGoBack = (window.history.state?.idx ?? 0) > 0;
+
+  // Alt+Left, and the mouse's own back button, both of which people try first.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.altKey && e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.altKey && e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigate(1);
+      }
+    };
+    const onMouse = (e) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.button === 4) {
+        e.preventDefault();
+        navigate(1);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mouseup', onMouse);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mouseup', onMouse);
+    };
+  }, [navigate]);
+
   // Keyboard shortcuts. Pages listen for "shelf:shortcut" for p and w.
   useEffect(() => {
     let pendingG = 0;
@@ -296,6 +330,17 @@ export default function Layout() {
               <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
             {waiting > 0 && <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-warn" />}
+          </button>
+          <button
+            onClick={() => navigate(-1)}
+            disabled={!canGoBack}
+            aria-label="Back"
+            title="Back (Alt+Left)"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded border border-edge text-ink-dim transition hover:border-accent/50 hover:text-ink disabled:opacity-30 disabled:hover:border-edge disabled:hover:text-ink-dim"
+          >
+            <svg viewBox="0 0 16 16" className="h-4 w-4" aria-hidden="true">
+              <path d="M10 3L5 8l5 5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
           </button>
           <form onSubmit={submitSearch} className="min-w-0 flex-1">
             <input
