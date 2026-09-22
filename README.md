@@ -28,6 +28,9 @@ Your files are never moved or renamed unless you preview and approve it in the o
 Point it at a downloads folder. It works out what each video is from its name, shows you
 exactly where every file would go, and moves only what you tick. Every batch can be undone.
 
+Already happy with where your files live? Choose **Rename only** and nothing moves: each file
+keeps the folder it is in and only its name changes, in whatever shape you pick.
+
 <img src="docs/screenshots/organize.jpg" alt="The organizer previewing five downloads, each with the tidy path it would move to" width="900">
 
 ### Know what you have, and what is missing

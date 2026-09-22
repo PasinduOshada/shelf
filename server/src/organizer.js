@@ -54,7 +54,9 @@ export function normalizeOptions(input = {}) {
     }
   };
   pick(o, input);
-  if (o.mode !== 'copy') o.mode = 'move';
+  // 'rename' leaves every file in the folder it is already in.
+  if (!['copy', 'rename'].includes(o.mode)) o.mode = 'move';
+  if (o.mode === 'rename') o.rename = true;
   return o;
 }
 
@@ -510,9 +512,13 @@ export async function planImport({
   const opts = normalizeOptions(options);
   const roots_ = sourceList(source, sources);
   if (!opts.include.tv && !opts.include.movies) throw new Error('Choose TV series, films, or both');
+  // Renaming in place needs no destination: every file keeps its own folder,
+  // which is the whole point of the mode.
+  const inPlace = opts.mode === 'rename';
+  const wants = { tv: opts.include.tv, movie: opts.include.movies };
   const roots = {
-    tv: opts.include.tv ? checkDestination(tvRoot) : null,
-    movie: opts.include.movies ? checkDestination(movieRoot) : null,
+    tv: !inPlace && opts.include.tv ? checkDestination(tvRoot) : null,
+    movie: !inPlace && opts.include.movies ? checkDestination(movieRoot) : null,
   };
 
   onProgress({ phase: 'Reading folders', done: 0, total: 0 });
@@ -564,7 +570,7 @@ export async function planImport({
       mtime: v.mtime, downloading: v.downloading,
     };
     if (id.kind === 'tv') {
-      if (!roots.tv) continue;
+      if (!wants.tv) continue;
       // A file inside a show's folder belongs to that folder: always when there
       // is a season folder in between, otherwise when the names agree.
       const trustFolder = item.home && (known || (id.folderTitle &&
@@ -582,7 +588,7 @@ export async function planImport({
       g.titles.push(id.title);
       g.years.push(id.year);
       g.items.push(item);
-    } else if (roots.movie) {
+    } else if (wants.movie) {
       movies.push(item);
     }
   }
@@ -609,14 +615,14 @@ export async function planImport({
       ext: extname(v.name).toLowerCase(), video: v, home: null,
       mtime: v.mtime, downloading: v.downloading,
     };
-    if (id.kind === 'tv' && roots.tv) {
+    if (id.kind === 'tv' && wants.tv) {
       const k = `title:${key(id.title)}`;
       if (!shows.has(k)) shows.set(k, { titles: [], years: [], items: [], home: null, folderTitle: null, known: null });
       const grp = shows.get(k);
       grp.titles.push(id.title);
       grp.years.push(id.year);
       grp.items.push(item);
-    } else if (id.kind === 'movie' && roots.movie) {
+    } else if (id.kind === 'movie' && wants.movie) {
       movies.push(item);
     }
   }
@@ -705,24 +711,33 @@ export async function planImport({
 
   for (const g of shows.values()) {
     // Show folders already in the destination are kept exactly as they are.
-    const showDir = (g.home && isInside(g.home, roots.tv) && g.home) ||
-      existingTitleDir(roots.tv, g.title) ||
-      join(roots.tv, showFolderName(g, opts.tv));
+    // Renaming in place has no destination, so there is no folder to work out.
+    const showDir = inPlace
+      ? null
+      : (g.home && isInside(g.home, roots.tv) && g.home) ||
+        existingTitleDir(roots.tv, g.title) ||
+        join(roots.tv, showFolderName(g, opts.tv));
     for (const it of g.items) {
       Object.assign(it, { title: g.title, year: g.year, tmdb_id: g.tmdb_id || null, source: g.source });
       const official = g.names?.get(it.season)?.get(it.episode);
       if (official) it.episodeTitle = official;
-      place(it, seasonDir(showDir, it.season, opts.tv.seasonPad), episodeFileBase(it, opts.tv));
+      place(
+        it,
+        inPlace ? it.video.dir : seasonDir(showDir, it.season, opts.tv.seasonPad),
+        episodeFileBase(it, opts.tv)
+      );
     }
   }
 
   for (const m of movies) {
     // A film already in a folder inside the destination (its own, or a
     // collection like "Avatar") stays there.
-    const kept = m.home && isInside(m.home, roots.movie) ? m.home : null;
-    const dir = kept || (opts.movie.folder
-      ? existingTitleDir(roots.movie, m.title) || join(roots.movie, movieBase(m, opts.movie))
-      : roots.movie);
+    const kept = !inPlace && m.home && isInside(m.home, roots.movie) ? m.home : null;
+    const dir = inPlace
+      ? m.video.dir
+      : kept || (opts.movie.folder
+        ? existingTitleDir(roots.movie, m.title) || join(roots.movie, movieBase(m, opts.movie))
+        : roots.movie);
     place(m, dir, movieFileBase(m, opts.movie));
   }
 
@@ -891,7 +906,8 @@ export async function applyPlan(plan, ids, { onProgress = () => {} } = {}) {
 
   for (const [n, item] of chosen.entries()) {
     onProgress({
-      phase: mode === 'copy' ? 'Copying' : 'Moving', done: n, total: chosen.length,
+      phase: mode === 'copy' ? 'Copying' : mode === 'rename' ? 'Renaming' : 'Moving',
+      done: n, total: chosen.length,
       bytes, total_bytes: totalBytes, current: basename(item.to),
     });
     const r = await transfer(batchId, mode, item.from, item.to);
@@ -1023,8 +1039,10 @@ export function startPlan({ source, sources, tvRoot, movieRoot, options }) {
   // Validate up front so bad paths fail the request, not the job.
   sourceList(source, sources);
   const opts = normalizeOptions(options);
-  if (opts.include.tv) checkDestination(tvRoot);
-  if (opts.include.movies) checkDestination(movieRoot);
+  if (opts.mode !== 'rename') {
+    if (opts.include.tv) checkDestination(tvRoot);
+    if (opts.include.movies) checkDestination(movieRoot);
+  }
   lastPlan = null;
   return runJob('preview', async (onProgress) => {
     const plan = await planImport({ source, sources, tvRoot, movieRoot, options: opts, onProgress });

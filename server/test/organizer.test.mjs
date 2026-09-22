@@ -238,3 +238,47 @@ test('rejects relative and missing paths', async () => {
     /does not exist/
   );
 });
+
+test('rename only: files keep their folders and just get proper names', async () => {
+  // For a library that is already where you want it: fix the names, move
+  // nothing. There is no destination at all in this mode.
+  const mine = join(work, 'Already Sorted');
+  touch(join(mine, 'Severance', 'severance.s01e01.1080p.web-dl.x265-grp.mkv'), 'a');
+  touch(join(mine, 'Severance', 'severance.s01e02.1080p.web-dl.x265-grp.mkv'), 'b');
+  touch(join(mine, 'my films', 'dune.part.two.2024.2160p.bluray.x265.mkv'), 'c');
+
+  const plan = await o.planImport({
+    source: mine,
+    settleMs: 0,
+    options: { mode: 'rename', useTmdb: false, include: { tv: true, movies: true } },
+  });
+
+  assert.equal(plan.summary.scanned, 3);
+  assert.equal(plan.items.length, 3, 'every file should be planned');
+  for (const item of plan.items) {
+    assert.equal(dirname(item.to), dirname(item.from), `${basename(item.from)} was moved out of its folder`);
+  }
+
+  const result = await o.applyPlan(plan, plan.items.map((i) => i.id));
+  assert.equal(result.done, 3);
+  assert.equal(result.failed, 0);
+
+  assert.deepEqual(readdirSync(join(mine, 'Severance')).sort(), [
+    'Severance - S01E01 - 1080p.mkv',
+    'Severance - S01E02 - 1080p.mkv',
+  ]);
+  assert.deepEqual(readdirSync(join(mine, 'my films')), ['Dune Part Two (2024) - 2160p.mkv']);
+
+  // And it can be taken back like any other batch.
+  const undone = await o.undoBatch(result.batch_id);
+  assert.equal(undone.reverted, 3);
+  assert.ok(readdirSync(join(mine, 'Severance')).includes('severance.s01e01.1080p.web-dl.x265-grp.mkv'));
+});
+
+test('rename only needs no destination folders at all', async () => {
+  const mine = join(work, 'No Destination');
+  touch(join(mine, 'The.Bear.S01E01.1080p.mkv'), 'd');
+  // startPlan validates destinations up front; in this mode there are none.
+  const job = o.startPlan({ source: mine, options: { mode: 'rename', useTmdb: false } });
+  assert.ok(job, 'a preview should start without tvRoot or movieRoot');
+});

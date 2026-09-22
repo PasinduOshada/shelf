@@ -383,7 +383,7 @@ export default function OrganizePage() {
   const chosen = buckets.ready.filter((i) => selected.has(i.id));
   const chosenBytes = chosen.reduce((n, i) => n + (i.size_bytes || 0), 0);
   const running = Boolean(job?.running);
-  const verb = plan?.options.mode === 'copy' ? 'Copy' : 'Move';
+  const verb = plan?.options.mode === 'copy' ? 'Copy' : plan?.options.mode === 'rename' ? 'Rename' : 'Move';
 
   function toggle(id) {
     setSelected((prev) => {
@@ -492,32 +492,41 @@ export default function OrganizePage() {
               placeholder="E:\Downloads"
               disabled={running}
             />
-            <div className="flex items-center gap-3 border-t border-edge/70 pt-4">
-              <span className="text-[12.5px] text-ink-dim">Into one destination:</span>
-              <button
-                onClick={() => choose('dest', 'Choose where organized files should go')}
-                disabled={running}
-                className={ghostBtn}
-              >
-                Choose destination
-              </button>
-            </div>
-            <PathField
-              label="TV series go to"
-              value={form.tvRoot}
-              onChange={(v) => set({ tvRoot: v })}
-              onBrowse={() => choose('tvRoot', 'Choose where TV series should go')}
-              placeholder="E:\Media\TV Series"
-              disabled={running || !opts.include.tv}
-            />
-            <PathField
-              label="Films go to"
-              value={form.movieRoot}
-              onChange={(v) => set({ movieRoot: v })}
-              onBrowse={() => choose('movieRoot', 'Choose where films should go')}
-              placeholder="E:\Media\Movies"
-              disabled={running || !opts.include.movies}
-            />
+            {opts.mode === 'rename' ? (
+              <div className="border-t border-edge/70 pt-4 text-[12.5px] text-ink-dim">
+                No destination needed. Every file stays in the folder it is in now, and only its
+                name changes, using the naming you choose on the right.
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 border-t border-edge/70 pt-4">
+                  <span className="text-[12.5px] text-ink-dim">Into one destination:</span>
+                  <button
+                    onClick={() => choose('dest', 'Choose where organized files should go')}
+                    disabled={running}
+                    className={ghostBtn}
+                  >
+                    Choose destination
+                  </button>
+                </div>
+                <PathField
+                  label="TV series go to"
+                  value={form.tvRoot}
+                  onChange={(v) => set({ tvRoot: v })}
+                  onBrowse={() => choose('tvRoot', 'Choose where TV series should go')}
+                  placeholder="E:\Media\TV Series"
+                  disabled={running || !opts.include.tv}
+                />
+                <PathField
+                  label="Films go to"
+                  value={form.movieRoot}
+                  onChange={(v) => set({ movieRoot: v })}
+                  onBrowse={() => choose('movieRoot', 'Choose where films should go')}
+                  placeholder="E:\Media\Movies"
+                  disabled={running || !opts.include.movies}
+                />
+              </>
+            )}
             <div className="flex flex-wrap gap-x-6 border-t border-edge/70 pt-3">
               <Toggle checked={opts.include.tv} onChange={(v) => setOpt('include.tv', v)} label="TV series" disabled={running} />
               <Toggle checked={opts.include.movies} onChange={(v) => setOpt('include.movies', v)} label="Films" disabled={running} />
@@ -528,15 +537,21 @@ export default function OrganizePage() {
         <Card title="How">
           <div className="flex flex-wrap items-center gap-3">
             <Segmented
-              label="Move or copy"
+              label="What to do with the files"
               value={opts.mode}
               onChange={(v) => setOpt('mode', v)}
-              options={[{ value: 'move', label: 'Move' }, { value: 'copy', label: 'Copy' }]}
+              options={[
+                { value: 'move', label: 'Move' },
+                { value: 'copy', label: 'Copy' },
+                { value: 'rename', label: 'Rename only' },
+              ]}
             />
             <span className="text-[11.5px] text-ink-dim">
               {opts.mode === 'move'
                 ? 'Files leave the source folder.'
-                : 'Originals stay where they are; needs free space.'}
+                : opts.mode === 'copy'
+                  ? 'Originals stay where they are; needs free space.'
+                  : 'Nothing moves. Every file keeps its folder and only its name changes.'}
             </span>
           </div>
 
@@ -914,7 +929,7 @@ function ResultBanner({ result, onUndo }) {
       </div>
     );
   }
-  const verb = result.mode === 'copy' ? 'Copied' : 'Moved';
+  const verb = result.mode === 'copy' ? 'Copied' : result.mode === 'rename' ? 'Renamed' : 'Moved';
   return (
     <div role="status" className="rounded-card border border-accent/35 bg-accent/10 px-4 py-3 text-[13px] text-ink">
       <div className="flex flex-wrap items-center gap-3">
