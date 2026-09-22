@@ -71,7 +71,7 @@ export function Renumber({ file, onSaved }) {
 }
 
 /** Rating, note, and the files behind an episode. */
-export default function EpisodePanel({ episode, onChanged }) {
+export default function EpisodePanel({ episode, onCatchUp, onChanged }) {
   const [files, setFiles] = useState(null);
   const [note, setNote] = useState(episode.note || '');
   const [saved, setSaved] = useState(null);
@@ -99,6 +99,15 @@ export default function EpisodePanel({ episode, onChanged }) {
           <RatingStars value={episode.user_rating} onChange={(rating) => review({ rating })} />
           {saved && <span className="text-[11px] text-good">{saved}</span>}
         </div>
+        {onCatchUp && episode.season_number > 0 && (
+          <button
+            onClick={() => onCatchUp(episode)}
+            className="mt-3 text-[11.5px] text-accent transition hover:underline"
+            title="Everything in this series up to and including this episode"
+          >
+            Mark this and everything before it watched
+          </button>
+        )}
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}

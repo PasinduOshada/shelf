@@ -193,3 +193,29 @@ test('a category folder is a shelf, not a title', async () => {
   freshDb.db.close();
   rmSync(work, { recursive: true, force: true });
 });
+
+test('an unplugged drive does not wipe what Shelf knows', () => {
+  // A library on a removable drive. Scanning while it is unplugged used to
+  // mark every one of its files missing, which reads as "your library is gone".
+  const drive = join(work, 'E drive');
+  file(join(drive, 'Severance', 'Severance.S01E01.1080p.mkv'));
+  scanner.addLibrary({ path: drive, kind: 'tv' });
+  scanner.scanLibraries();
+
+  const onDrive = () =>
+    db.db.prepare('SELECT COUNT(*) c FROM files WHERE is_missing = 0 AND path LIKE ?').get(drive + '%').c;
+  assert.equal(onDrive(), 1, 'the drive should have been scanned');
+  const show = db.db.prepare('SELECT id FROM shows WHERE folder_path LIKE ?').get(drive + '%');
+  assert.ok(show, 'its show should exist');
+
+  // Unplugged.
+  rmSync(drive, { recursive: true, force: true });
+  const stats = scanner.scanLibraries();
+
+  assert.ok(stats.unavailable.includes(drive), 'the scan should report the folder it could not reach');
+  assert.equal(onDrive(), 1, 'its files were marked missing even though the drive was just absent');
+  assert.ok(
+    db.db.prepare('SELECT id FROM shows WHERE id = ?').get(show.id),
+    'the show should survive its drive being unplugged'
+  );
+});

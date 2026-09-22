@@ -475,12 +475,18 @@ export function scanLibraries({ libraryId = null } = {}) {
   const excludes = loadExcludes();
   const stats = {
     libraries: 0, shows: 0, episodes: 0, movies: 0,
-    files: 0, extras: 0, subtitles: 0, skipped: 0, missing: 0, durationMs: 0,
+    files: 0, extras: 0, subtitles: 0, skipped: 0, missing: 0, unavailable: [], durationMs: 0,
   };
   const started = Date.now();
 
   for (const library of libs) {
-    if (!existsSync(library.path)) continue;
+    if (!existsSync(library.path)) {
+      // An external drive that is not plugged in, or a folder that moved. Its
+      // files are not gone, they are just out of reach, so nothing under it is
+      // touched below.
+      stats.unavailable.push(library.path);
+      continue;
+    }
     stats.libraries++;
     isHidden = hiddenFilter([library.path]);
     transaction(() => {
@@ -491,7 +497,16 @@ export function scanLibraries({ libraryId = null } = {}) {
   }
 
   transaction(() => {
+    const outOfReach = stats.unavailable.map((p) => normalize(p));
+    const unreachable = (path) => {
+      const p = normalize(path);
+      return outOfReach.some((root) => p === root || p.startsWith(root + '/'));
+    };
+
     for (const row of db.prepare('SELECT id, path FROM files WHERE is_missing = 0').all()) {
+      // Marking a whole library missing because its drive is unplugged would
+      // throw away everything Shelf knows about it, for no reason.
+      if (unreachable(row.path)) continue;
       if (!existsSync(row.path)) {
         db.prepare('UPDATE files SET is_missing = 1 WHERE id = ?').run(row.id);
         stats.missing++;

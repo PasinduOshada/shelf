@@ -59,8 +59,13 @@ export default function SettingsPage() {
       const skipped = stats.skipped
         ? ` ${stats.skipped} clip${stats.skipped === 1 ? '' : 's'} left out.`
         : '';
+      const unreachable = stats.unavailable?.length
+        ? ` ${plural(stats.unavailable.length, 'folder')} could not be reached; nothing under ${
+            stats.unavailable.length === 1 ? 'it' : 'them'
+          } was changed.`
+        : '';
       setMessage({
-        text: `Scanned ${plural(stats.files, 'file')} — ${plural(stats.shows, 'show')} and ${plural(stats.movies, 'film')} in ${stats.durationMs} ms.${skipped}`,
+        text: `Scanned ${plural(stats.files, 'file')} — ${plural(stats.shows, 'show')} and ${plural(stats.movies, 'film')} in ${stats.durationMs} ms.${skipped}${unreachable}`,
       });
       window.dispatchEvent(new CustomEvent('shelf:refresh'));
       await load();
@@ -194,12 +199,30 @@ export default function SettingsPage() {
                     <div className="mono truncate text-[10.5px] text-ink-dim">{lib.path}</div>
                   </div>
                   <span className="mono text-[10.5px] text-ink-dim">
+                    {lib.available === false && (
+                      <span className="mr-2 text-warn">folder not found — is the drive connected?</span>
+                    )}
                     {lib.last_scan ? `scanned ${lib.last_scan.slice(0, 16)}` : 'never scanned'}
                   </span>
                   <button
                     onClick={async () => {
-                      await api.removeLibrary(lib.id);
+                      const ok = confirm(
+                        `Stop watching this folder?
+
+` +
+                          `Your files are not touched. Shelf forgets where they were, and titles ` +
+                          `you never watched or rated are dropped from the library. Anything you ` +
+                          `did watch or rate is kept as a record.`
+                      );
+                      if (!ok) return;
+                      const result = await api.removeLibrary(lib.id);
+                      setMessage({
+                        text: result?.kept
+                          ? `Folder removed. ${plural(result.kept, 'title')} kept as records, ${result.removed} dropped.`
+                          : 'Folder removed.',
+                      });
                       load();
+                      window.dispatchEvent(new CustomEvent('shelf:refresh'));
                     }}
                     title="Removes it from Shelf. Your files stay exactly where they are."
                     className="text-[11px] text-ink-dim transition hover:text-danger"

@@ -76,8 +76,8 @@ router.post('/episodes/:id/watch', (req, res) => {
 
 /** Mark a whole season (or show) watched in one action. */
 router.post('/shows/:id/watch', (req, res) => {
-  const { season = null, watched = true } = req.body || {};
-  const r = watch.setShowWatched(req.params.id, { season, watched });
+  const { season = null, watched = true, upTo = null } = req.body || {};
+  const r = watch.setShowWatched(req.params.id, { season, watched, upTo });
   if (!r) return res.status(404).json({ error: 'Show not found' });
   res.json(r);
 });

@@ -118,18 +118,34 @@ export function setMovieWatched(movieId, watched, { at = null, ifUnwatched = fal
 }
 
 /** Mark a whole season (or show) watched in one action. Only episodes on disk. */
-export function setShowWatched(showId, { season = null, watched = true } = {}) {
+/**
+ * Mark a series, a season, or everything up to one episode.
+ *
+ * `upTo: { season, episode }` catches up to that point, the way someone who
+ * started watching midway wants: everything before it and it, nothing after.
+ */
+export function setShowWatched(showId, { season = null, watched = true, upTo = null } = {}) {
   const show = db.prepare('SELECT * FROM shows WHERE id = ?').get(showId);
   if (!show) return null;
 
   // Everything that has aired, whether or not it is on this computer: people
   // mark a series watched because they watched it, not because they kept the
   // files. Episodes still to come are left alone.
-  const eps = db.prepare(`
-    SELECT e.* FROM episodes e
-    WHERE e.show_id = ? ${season != null ? 'AND e.season_number = ?' : ''}
-      AND (e.air_date IS NULL OR e.air_date <= date('now'))
-  `).all(...(season != null ? [show.id, season] : [show.id]));
+  const filters = ['e.show_id = ?'];
+  const args = [show.id];
+  if (season != null) {
+    filters.push('e.season_number = ?');
+    args.push(season);
+  }
+  if (upTo && Number.isInteger(upTo.season) && Number.isInteger(upTo.episode)) {
+    // Season 0 is specials, which sit outside the run of a series.
+    filters.push('e.season_number > 0');
+    filters.push('(e.season_number < ? OR (e.season_number = ? AND e.episode_number <= ?))');
+    args.push(upTo.season, upTo.season, upTo.episode);
+  }
+  filters.push("(e.air_date IS NULL OR e.air_date <= date('now'))");
+
+  const eps = db.prepare(`SELECT e.* FROM episodes e WHERE ${filters.join(' AND ')}`).all(...args);
 
   transaction(() => {
     for (const ep of eps) {

@@ -90,10 +90,16 @@ export function removeTracked(kind, id) {
   const row = db.prepare(`SELECT id FROM ${table} WHERE id = ?`).get(id);
   if (!row) throw fail('Not found', 404);
 
-  const files = db.prepare(`SELECT COUNT(*) c FROM files WHERE ${column} = ?`).get(id).c;
-  if (files) {
+  // Only files that are actually there count. Someone who deleted the videos
+  // and rescanned is left with rows pointing at nothing, and refusing to let
+  // go of the title because of those would be refusing for no reason.
+  const present = db
+    .prepare(`SELECT COUNT(*) c FROM files WHERE ${column} = ? AND is_missing = 0`)
+    .get(id).c;
+  if (present) {
     throw fail('This one has files in your library, so it stays. Remove the files instead.', 409);
   }
+  db.prepare(`DELETE FROM files WHERE ${column} = ?`).run(id);
   removeRow(kind, id);
   return { ok: true };
 }

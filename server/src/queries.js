@@ -271,6 +271,8 @@ export function continueWatching(limit = 24) {
     JOIN files f ON f.episode_id = e.id AND f.is_missing = 0
     LEFT JOIN episode_state es ON es.episode_id = e.id
     WHERE COALESCE(es.watched, 0) = 0
+      -- Dropped or finished: you have said you are not watching this.
+      AND COALESCE(s.user_status, '') NOT IN ('dropped', 'completed')
       AND e.id = (
         SELECT e2.id FROM episodes e2
         JOIN files f2 ON f2.episode_id = e2.id AND f2.is_missing = 0
@@ -304,6 +306,8 @@ export function upcoming(days = 90) {
     WHERE e.air_date IS NOT NULL
       AND e.air_date > date('now')
       AND e.air_date <= date('now', '+' || ? || ' days')
+      -- What is coming for a series you dropped is not news you asked for.
+      AND COALESCE(s.user_status, '') != 'dropped'
     ORDER BY e.air_date, s.sort_title
   `).all(days);
 
@@ -344,6 +348,8 @@ export function missingReport() {
       AND NOT EXISTS (
         SELECT 1 FROM files f WHERE f.episode_id = e.id AND f.is_missing = 0
       )
+      -- Nothing is missing from a series you dropped.
+      AND COALESCE(s.user_status, '') != 'dropped'
       -- A title you only follow, or one whose files you deleted, is not a gap
       -- in the library: you are not missing what you never kept.
       AND EXISTS (

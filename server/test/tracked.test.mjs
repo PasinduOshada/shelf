@@ -158,3 +158,66 @@ test('a whole series can be marked watched with nothing on disk', async () => {
     'clearing should leave nothing watched'
   );
 });
+
+test('a title whose files you deleted can still be let go', async () => {
+  // The button appeared but the action refused, because rows pointing at files
+  // that are no longer there still counted as "files in your library".
+  episodeFile(join(tv, 'Gone Show', 'Gone.Show.S01E01.1080p.mkv'));
+  scanner.scanLibraries();
+  const show = db.db.prepare("SELECT id FROM shows WHERE sort_title LIKE 'gone%'").get();
+  assert.ok(show, 'the show should have been scanned');
+
+  rmSync(join(tv, 'Gone Show'), { recursive: true, force: true });
+  scanner.scanLibraries();
+
+  const full = q.getShow(show.id);
+  assert.equal(full.stats.owned, 0, 'nothing should be on disk any more');
+  assert.deepEqual(tracked.removeTracked('show', show.id), { ok: true });
+  assert.equal(q.getShow(show.id), null, 'the title should be gone');
+  assert.equal(
+    db.db.prepare('SELECT COUNT(*) c FROM files WHERE show_id = ?').get(show.id).c,
+    0,
+    'its stale file rows should go too'
+  );
+});
+
+test('catching up marks everything to that point and nothing after', async () => {
+  const show = await tracked.addTracked({ kind: 'show', title: 'The Wire', year: 2002 });
+  for (const [season, count] of [[1, 3], [2, 3]]) {
+    for (let n = 1; n <= count; n++) {
+      db.db.prepare(
+        `INSERT INTO episodes (id, show_id, season_number, episode_number, title, air_date)
+         VALUES (?, ?, ?, ?, ?, '2002-06-02')`
+      ).run(`wire-${season}-${n}`, show.id, season, n, `Episode ${n}`);
+    }
+  }
+  // A special, which sits outside the run and should not be swept up.
+  db.db.prepare(
+    `INSERT INTO episodes (id, show_id, season_number, episode_number, title, air_date)
+     VALUES ('wire-special', ?, 0, 1, 'Behind the scenes', '2002-06-02')`
+  ).run(show.id);
+
+  watch.setShowWatched(show.id, { watched: true, upTo: { season: 2, episode: 2 } });
+
+  const watched = db.db
+    .prepare('SELECT episode_id FROM episode_state WHERE show_id = ? AND watched = 1')
+    .all(show.id)
+    .map((r) => r.episode_id)
+    .sort();
+  assert.deepEqual(watched, ['wire-1-1', 'wire-1-2', 'wire-1-3', 'wire-2-1', 'wire-2-2']);
+});
+
+test('a series you dropped stops asking to be watched', async () => {
+  episodeFile(join(tv, 'Dropped Show', 'Dropped.Show.S01E01.1080p.mkv'));
+  scanner.scanLibraries();
+  const show = db.db.prepare("SELECT id FROM shows WHERE sort_title LIKE 'dropped%'").get();
+
+  assert.ok(q.continueWatching(50).some((r) => r.show_id === show.id), 'it should be queued at first');
+
+  db.db.prepare("UPDATE shows SET user_status = 'dropped' WHERE id = ?").run(show.id);
+  assert.ok(!q.continueWatching(50).some((r) => r.show_id === show.id), 'a dropped series is still queued');
+  assert.ok(!q.missingReport().some((r) => r.show_id === show.id), 'a dropped series still reports gaps');
+
+  db.db.prepare("UPDATE shows SET user_status = 'completed' WHERE id = ?").run(show.id);
+  assert.ok(!q.continueWatching(50).some((r) => r.show_id === show.id), 'a finished series is still queued');
+});

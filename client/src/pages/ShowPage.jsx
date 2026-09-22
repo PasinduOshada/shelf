@@ -19,7 +19,7 @@ const MISSING_HATCH = {
 
 const epCode = (e) => episodeLabel(e.season_number, e.episode_number);
 
-function EpisodeRow({ episode, onToggle, busy, onSubtitles, expanded, onExpand, onChanged }) {
+function EpisodeRow({ episode, onToggle, busy, onSubtitles, expanded, onExpand, onChanged, onCatchUp }) {
   // The server decides what counts as missing (specials and unscheduled
   // episodes are excluded), so the row trusts that flag.
   const missing = episode.missing;
@@ -108,7 +108,7 @@ function EpisodeRow({ episode, onToggle, busy, onSubtitles, expanded, onExpand, 
         {episode.duration ? formatClock(episode.duration) : episode.size_bytes > 0 ? formatBytes(episode.size_bytes) : '—'}
       </span>
     </div>
-    {expanded && <EpisodePanel episode={episode} onChanged={onChanged} />}
+    {expanded && <EpisodePanel episode={episode} onChanged={onChanged} onCatchUp={onCatchUp} />}
     </>
   );
 }
@@ -211,6 +211,16 @@ export default function ShowPage() {
 
   const toggleEpisode = (ep) => run(() => api.watchEpisode(ep.id, !ep.watched));
   const markSeason = (season, watched) => run(() => api.watchShow(id, { season, watched }));
+
+  /** Everything up to one episode, for a series picked up partway through. */
+  function catchUpTo(episode) {
+    const code = episodeLabel(episode.season_number, episode.episode_number);
+    if (!confirm(`Mark everything in ${show.title} up to and including ${code} as watched?`)) return;
+    run(() => api.watchShow(id, {
+      watched: true,
+      upTo: { season: episode.season_number, episode: episode.episode_number },
+    }));
+  }
 
   /** Every season at once, for a series you watched long before Shelf existed. */
   function markSeries(watched) {
@@ -495,6 +505,7 @@ export default function ShowPage() {
                   expanded={expanded === ep.id}
                   onExpand={() => setExpanded((cur) => (cur === ep.id ? null : ep.id))}
                   onChanged={load}
+                  onCatchUp={catchUpTo}
                 />
               ))}
             </div>

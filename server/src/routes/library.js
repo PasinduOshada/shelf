@@ -6,7 +6,7 @@ import multer from 'multer';
 import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { db, setSetting, getSetting, sortTitle } from '../db.js';
+import { db, setSetting, getSetting, sortTitle, transaction } from '../db.js';
 import { UPLOADS_DIR } from '../paths.js';
 import { scanLibraries, addLibrary } from '../scanner/scan.js';
 import * as q from '../queries.js';
@@ -41,7 +41,12 @@ const upload = multer({
 // ---------------------------------------------------------------- libraries
 
 router.get('/libraries', (_req, res) => {
-  res.json(db.prepare('SELECT * FROM libraries ORDER BY kind, label').all());
+  // Whether the folder is actually reachable right now: an unplugged drive
+  // should say so rather than look like an empty library.
+  res.json(
+    db.prepare('SELECT * FROM libraries ORDER BY kind, label').all()
+      .map((row) => ({ ...row, available: existsSync(row.path) }))
+  );
 });
 
 router.post('/libraries', (req, res) => {
@@ -53,9 +58,60 @@ router.post('/libraries', (req, res) => {
   res.status(201).json(addLibrary({ path, kind, label: label || null }));
 });
 
+/**
+ * Stop watching a folder. Its file index goes with it - keeping paths Shelf no
+ * longer looks at would only leave titles that can never be played or cleaned
+ * up. What you watched, rated or wrote down stays: that is yours, not the
+ * folder's, and the title remains as a record with no files, exactly like one
+ * you added by hand.
+ */
 router.delete('/libraries/:id', (req, res) => {
-  db.prepare('DELETE FROM libraries WHERE id = ?').run(req.params.id);
-  res.json({ ok: true });
+  const id = req.params.id;
+  const result = transaction(() => {
+    const shows = db.prepare('SELECT id FROM shows WHERE library_id = ?').all(id).map((r) => r.id);
+    const movies = db.prepare('SELECT id FROM movies WHERE library_id = ?').all(id).map((r) => r.id);
+    const files = db.prepare('SELECT COUNT(*) c FROM files WHERE show_id IN (SELECT id FROM shows WHERE library_id = ?) OR movie_id IN (SELECT id FROM movies WHERE library_id = ?)').get(id, id).c;
+
+    db.prepare('DELETE FROM files WHERE show_id IN (SELECT id FROM shows WHERE library_id = ?)').run(id);
+    db.prepare('DELETE FROM files WHERE movie_id IN (SELECT id FROM movies WHERE library_id = ?)').run(id);
+
+    // Titles with nothing of yours attached go too; the rest stay as records.
+    let removed = 0;
+    for (const showId of shows) {
+      const keep = db.prepare(`
+        SELECT 1 FROM shows s WHERE s.id = ?
+          AND (s.is_favorite = 1 OR s.user_status IS NOT NULL OR s.user_rating IS NOT NULL
+               OR (s.notes IS NOT NULL AND s.notes != '')
+               OR EXISTS (SELECT 1 FROM watch_history h WHERE h.show_id = s.id)
+               OR EXISTS (SELECT 1 FROM episode_state e WHERE e.show_id = s.id AND (e.watched = 1 OR e.rating IS NOT NULL)))
+      `).get(showId);
+      if (keep) {
+        db.prepare('UPDATE shows SET library_id = NULL, folder_path = NULL WHERE id = ?').run(showId);
+      } else {
+        db.prepare('DELETE FROM shows WHERE id = ?').run(showId);
+        removed++;
+      }
+    }
+    for (const movieId of movies) {
+      const keep = db.prepare(`
+        SELECT 1 FROM movies m WHERE m.id = ?
+          AND (m.is_favorite = 1 OR m.user_status IS NOT NULL OR m.user_rating IS NOT NULL
+               OR (m.notes IS NOT NULL AND m.notes != '')
+               OR EXISTS (SELECT 1 FROM watch_history h WHERE h.movie_id = m.id)
+               OR EXISTS (SELECT 1 FROM movie_state s WHERE s.movie_id = m.id AND (s.watched = 1 OR s.rating IS NOT NULL)))
+      `).get(movieId);
+      if (keep) {
+        db.prepare('UPDATE movies SET library_id = NULL WHERE id = ?').run(movieId);
+      } else {
+        db.prepare('DELETE FROM movies WHERE id = ?').run(movieId);
+        removed++;
+      }
+    }
+
+    db.prepare('DELETE FROM libraries WHERE id = ?').run(id);
+    return { ok: true, files, removed, kept: shows.length + movies.length - removed };
+  });
+  res.json(result);
 });
 
 router.post('/scan', (req, res) => {
