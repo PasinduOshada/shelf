@@ -65,6 +65,7 @@ export const api = {
   upcoming: (days) => req(`/upcoming${qs({ days })}`),
   missing: () => req('/missing'),
   duplicates: () => req('/duplicates'),
+  genres: () => req('/genres'),
   surprise: (params) => req(`/surprise${qs(params)}`),
 
   watchEpisode: (id, watched) => req(`/episodes/${id}/watch`, { method: 'POST', body: { watched } }),

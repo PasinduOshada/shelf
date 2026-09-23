@@ -456,3 +456,83 @@ export function missingReport() {
     .sort((a, b) => b.gap_count - a.gap_count || b.count - a.count);
 }
 
+
+// TMDB names television genres differently from film ones, so a library ends
+// up with "Action" films on one shelf and "Action & Adventure" series on
+// another. Browsing wants one shelf, so the combined television names are
+// mapped onto the film names they cover.
+const GENRE_ALIASES = {
+  'Action & Adventure': ['Action', 'Adventure'],
+  'Sci-Fi & Fantasy': ['Science Fiction', 'Fantasy'],
+  'War & Politics': ['War'],
+};
+
+const genreNames = (raw) => {
+  const out = new Set();
+  for (const name of parseJson(raw, [])) {
+    for (const mapped of GENRE_ALIASES[name] || [name]) out.add(mapped);
+  }
+  return out;
+};
+
+/**
+ * The library grouped by genre, for browsing by mood rather than by name.
+ * A title with three genres appears under all three: that is what genres are.
+ * Genres come from TMDB, so without a key there is nothing to group by.
+ */
+export function byGenre() {
+  const shows = db.prepare(`
+    SELECT s.id, s.title, s.year, s.genres, s.poster_path, s.custom_poster, s.icon_emoji,
+           (SELECT COUNT(DISTINCT f.episode_id) FROM files f
+             WHERE f.show_id = s.id AND f.episode_id IS NOT NULL AND f.is_missing = 0) AS owned_episodes,
+           (SELECT COUNT(*) FROM episode_state es WHERE es.show_id = s.id AND es.watched = 1) AS watched_episodes
+    FROM shows s
+  `).all();
+
+  const movies = db.prepare(`
+    SELECT m.id, COALESCE(m.tmdb_title, m.title) AS title, m.year, m.genres,
+           m.poster_path, m.custom_poster, m.icon_emoji,
+           COALESCE(ms.watched, 0) AS watched
+    FROM movies m
+    LEFT JOIN movie_state ms ON ms.movie_id = m.id
+  `).all();
+
+  const groups = new Map();
+  const add = (name, item) => {
+    if (!groups.has(name)) groups.set(name, { name, shows: 0, movies: 0, items: [] });
+    const g = groups.get(name);
+    g[item.kind === 'show' ? 'shows' : 'movies']++;
+    g.items.push(item);
+  };
+
+  for (const row of shows) {
+    const item = {
+      id: row.id, kind: 'show', title: row.title, year: row.year,
+      poster: row.custom_poster || (row.poster_path ? `tmdb:${row.poster_path}` : null),
+      icon_emoji: row.icon_emoji,
+      watched: row.owned_episodes > 0 && row.watched_episodes >= row.owned_episodes,
+    };
+    for (const name of genreNames(row.genres)) add(name, item);
+  }
+  for (const row of movies) {
+    const item = {
+      id: row.id, kind: 'movie', title: row.title, year: row.year,
+      poster: row.custom_poster || (row.poster_path ? `tmdb:${row.poster_path}` : null),
+      icon_emoji: row.icon_emoji,
+      watched: Boolean(row.watched),
+    };
+    for (const name of genreNames(row.genres)) add(name, item);
+  }
+
+  const ungrouped =
+    shows.filter((s) => !parseJson(s.genres, []).length).length +
+    movies.filter((m) => !parseJson(m.genres, []).length).length;
+
+  return {
+    // Biggest shelves first; a genre with two things is less useful to browse.
+    genres: [...groups.values()]
+      .map((g) => ({ ...g, count: g.items.length, items: g.items.sort((a, b) => a.title.localeCompare(b.title)) }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    without_genres: ungrouped,
+  };
+}

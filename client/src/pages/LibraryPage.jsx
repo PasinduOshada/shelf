@@ -268,6 +268,119 @@ function ContinueLine({ item, onWatched, busy }) {
   );
 }
 
+/* ---- genres --------------------------------------------------------- */
+
+// One row of a shelf, so sixteen genres stay browsable instead of becoming a
+// mile of posters. The rest is one click away.
+const SHELF_PREVIEW = 14;
+
+function GenreShelf({ genre }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? genre.items : genre.items.slice(0, SHELF_PREVIEW);
+  const hidden = genre.items.length - shown.length;
+
+  return (
+    <section className="cv-auto">
+      <div className="mb-3 flex items-baseline gap-3">
+        <h2 className="display text-[15px] uppercase tracking-[0.12em] text-ink">{genre.name}</h2>
+        <span className="mono text-[10px] uppercase tracking-wider text-ink-dim">
+          {genre.shows > 0 && plural(genre.shows, 'show')}
+          {genre.shows > 0 && genre.movies > 0 && ' · '}
+          {genre.movies > 0 && plural(genre.movies, 'film')}
+        </span>
+        {(hidden > 0 || all) && (
+          <button
+            onClick={() => setAll((v) => !v)}
+            className="mono ml-auto text-[10px] uppercase tracking-wider text-accent transition hover:underline"
+          >
+            {all ? 'Show less' : `Show all ${genre.items.length}`}
+          </button>
+        )}
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-x-3.5 gap-y-5">
+        {shown.map((item) => (
+          <Link
+            key={`${item.kind}-${item.id}`}
+            to={`/${item.kind === 'show' ? 'show' : 'movie'}/${item.id}`}
+            className="group block rise"
+          >
+            <Poster poster={item.poster} title={item.title} emoji={item.icon_emoji}>
+              {item.watched && (
+                <div className="absolute right-1.5 top-1.5 z-[3] grid h-5 w-5 place-items-center rounded-full bg-accent text-[10px] text-accent-ink">
+                  ✓
+                </div>
+              )}
+            </Poster>
+            <div className="mt-1.5 truncate text-[12px] font-medium text-ink transition-colors group-hover:text-accent">
+              {item.title}
+            </div>
+            <div className="mono truncate text-[10px] text-ink-dim">
+              {item.kind === 'show' ? 'series' : item.year || 'film'}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Genres({ tmdbReady }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    api.genres().then(setData).catch(() => setData({ genres: [], without_genres: 0 }));
+  }, []);
+
+  if (!data) {
+    return (
+      <div className="grid gap-8">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-3">
+            <div className="skeleton h-4 w-40 rounded" />
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(112px,1fr))] gap-3.5">
+              {Array.from({ length: 6 }).map((_, j) => (
+                <div key={j} className="skeleton aspect-[2/3] rounded-card" />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (!data.genres.length) {
+    return (
+      <EmptyState
+        icon="🎭"
+        title="No genres yet"
+        hint={
+          tmdbReady
+            ? 'Genres arrive with the rest of the metadata. Fetch posters and metadata in Settings, then come back.'
+            : 'Genres come from TMDB. Add a free key in Settings and they appear here.'
+        }
+        action={
+          <Link to="/settings" className={primaryBtn}>
+            Open Settings
+          </Link>
+        }
+      />
+    );
+  }
+
+  return (
+    <div className="grid gap-10">
+      {data.genres.map((genre) => (
+        <GenreShelf key={genre.name} genre={genre} />
+      ))}
+      {data.without_genres > 0 && (
+        <p className="text-[12.5px] text-ink-dim">
+          {plural(data.without_genres, 'title')} with no genre yet — they need a TMDB match.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ---- page ---------------------------------------------------------- */
 
 export default function LibraryPage() {
@@ -349,6 +462,7 @@ export default function LibraryPage() {
     });
   }
 
+  const browsing = tab === 'genres';
   const items = tab === 'shows' ? shows : movies;
   const totalBytes = (items || []).reduce((sum, x) => sum + (x.size_bytes || 0), 0);
 
@@ -375,7 +489,7 @@ export default function LibraryPage() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-5">
         <div className="flex items-center gap-6" role="tablist" aria-label="Library">
-          {['shows', 'movies'].map((id) => (
+          {['shows', 'movies', 'genres'].map((id) => (
             <button
               key={id}
               role="tab"
@@ -387,7 +501,7 @@ export default function LibraryPage() {
             >
               {id}
               <span className="mono ml-2 text-[10px] tracking-normal opacity-60">
-                {id === 'shows' ? shows?.length ?? '' : movies?.length ?? ''}
+                {id === 'genres' ? '' : id === 'shows' ? shows?.length ?? '' : movies?.length ?? ''}
               </span>
             </button>
           ))}
@@ -400,7 +514,7 @@ export default function LibraryPage() {
         </button>
         </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <div className={`flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 ${browsing ? 'hidden' : ''}`}>
           <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by status">
             {STATUSES.map((f) => (
               <button
@@ -462,7 +576,9 @@ export default function LibraryPage() {
         </div>
       )}
 
-      {loading && !items ? (
+      {browsing ? (
+        <Genres tmdbReady={tmdbReady} />
+      ) : loading && !items ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-4 gap-y-6">
           {Array.from({ length: 18 }).map((_, i) => (
             <div key={i} className="space-y-2">

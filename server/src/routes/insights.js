@@ -18,6 +18,10 @@ router.get('/upcoming', (req, res) => {
   res.json(q.upcoming(Number(req.query.days) || 90));
 });
 
+router.get('/genres', (_req, res) => {
+  res.json(q.byGenre());
+});
+
 router.get('/missing', (_req, res) => {
   res.json(q.missingReport());
 });

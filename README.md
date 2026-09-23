@@ -33,6 +33,12 @@ keeps the folder it is in and only its name changes, in whatever shape you pick.
 
 <img src="docs/screenshots/organize.jpg" alt="The organizer previewing five downloads, each with the tidy path it would move to" width="900">
 
+### Browse by genre
+
+A **Genres** tab beside Shows and Films, with series and films on the same shelf. TMDB names
+television genres differently from film ones — "Action & Adventure" against "Action" — so
+those are folded together; browsing for something to watch should not care which is which.
+
 ### Know what you have, and what is missing
 
 <img src="docs/screenshots/show.jpg" alt="A series page: seasons, episodes on disk, what has been watched, file quality and size" width="900">

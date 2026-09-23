@@ -270,3 +270,43 @@ test('new-episode alerts fire once per episode', () => {
   assert.deepEqual(m.airing.checkAiring(), []);
   assert.ok(existsSync(join(work, 'lib')));
 });
+
+test('browsing by genre puts series and films on the same shelf', async () => {
+  const q = await import('../src/queries.js');
+  const db2 = (await import('../src/db.js')).db;
+
+  db2.prepare(
+    `INSERT INTO shows (id, title, sort_title, genres, tmdb_status)
+     VALUES ('g-show', 'Andor', 'andor', ?, 'matched')`
+  ).run(JSON.stringify(['Sci-Fi & Fantasy', 'Action & Adventure', 'Drama']));
+  db2.prepare(
+    `INSERT INTO movies (id, title, sort_title, year, genres, tmdb_status)
+     VALUES ('g-film', 'Arrival', 'arrival', 2016, ?, 'matched')`
+  ).run(JSON.stringify(['Science Fiction', 'Drama']));
+  db2.prepare(
+    `INSERT INTO movies (id, title, sort_title, genres, tmdb_status)
+     VALUES ('g-none', 'Unmatched Thing', 'unmatched thing', NULL, 'unmatched')`
+  ).run();
+
+  const { genres, without_genres } = q.byGenre();
+  const find = (name) => genres.find((g) => g.name === name);
+
+  // TMDB calls it "Sci-Fi & Fantasy" for television and "Science Fiction" for
+  // film: one shelf, or browsing is useless.
+  const scifi = find('Science Fiction');
+  assert.ok(scifi, `no Science Fiction shelf: ${genres.map((g) => g.name).join(', ')}`);
+  assert.ok(scifi.items.some((i) => i.id === 'g-show'), 'the series is missing from it');
+  assert.ok(scifi.items.some((i) => i.id === 'g-film'), 'the film is missing from it');
+
+  assert.ok(find('Action')?.items.some((i) => i.id === 'g-show'), 'Action & Adventure should reach Action');
+  assert.ok(find('Adventure')?.items.some((i) => i.id === 'g-show'), 'and Adventure');
+  assert.ok(!find('Sci-Fi & Fantasy'), 'the television name should not survive as its own shelf');
+
+  const drama = find('Drama');
+  assert.equal(drama.shows >= 1 && drama.movies >= 1, true, 'Drama should hold both kinds');
+  assert.ok(without_genres >= 1, 'a title with no genres should be counted, not hidden');
+  assert.ok(
+    genres.every((g, i) => i === 0 || genres[i - 1].count >= g.count),
+    'shelves should come biggest first'
+  );
+});
