@@ -13,7 +13,7 @@ No account. No cloud. No ads. Nothing leaves your computer.
 [Organizer](#organize-your-files) ·
 [Buy me a coffee](https://ko-fi.com/picklerobot)
 
-<img src="docs/screenshots/library.jpg" alt="The Shelf library: posters, what you are part way through, and how much space each series takes" width="900">
+<img src="docs/shelf.gif" alt="Shelf: the library, a series, the organizer previewing a set of downloads, the statistics, and browsing by genre" width="900">
 
 </div>
 
@@ -40,6 +40,8 @@ television genres differently from film ones — "Action & Adventure" against "A
 those are folded together; browsing for something to watch should not care which is which.
 
 ### Know what you have, and what is missing
+
+<img src="docs/screenshots/library.jpg" alt="The Shelf library: posters, what you are part way through, and how much space each series takes" width="900">
 
 <img src="docs/screenshots/show.jpg" alt="A series page: seasons, episodes on disk, what has been watched, file quality and size" width="900">
 

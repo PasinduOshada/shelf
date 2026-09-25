@@ -49,7 +49,8 @@
   },
   "devDependencies": {
     "electron": "^42.0.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "gifenc": "^1.0.3"
   },
   "build": {
     "appId": "online.falconsl.shelf",
