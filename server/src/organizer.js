@@ -146,6 +146,40 @@ function existingTitleDir(root, title) {
   return null;
 }
 
+/**
+ * Where the library already keeps a series, whatever its folder is called.
+ *
+ * Someone with "Monarch S2" on disk, matched to "Monarch: Legacy of Monsters",
+ * should not get a second folder under the official name the first time a new
+ * episode is organized: that splits one series across two folders and two
+ * entries. Shelf already knows where it lives, so it asks itself first.
+ */
+function libraryShowDir(root, { tmdb_id, title }) {
+  if (!root) return null;
+  const usable = (path) => path && isInside(path, root) && existsSync(path);
+
+  if (tmdb_id) {
+    for (const row of db
+      .prepare('SELECT folder_path FROM shows WHERE tmdb_id = ? AND folder_path IS NOT NULL')
+      .all(tmdb_id)) {
+      if (usable(row.folder_path)) return row.folder_path;
+    }
+  }
+
+  // By name, compared the way every other title comparison here is made:
+  // punctuation apart, "Monarch: Legacy of Monsters" and the name a file
+  // gives are the same series.
+  if (title) {
+    const want = key(title);
+    for (const row of db
+      .prepare('SELECT folder_path, title FROM shows WHERE folder_path IS NOT NULL')
+      .all()) {
+      if (key(row.title) === want && usable(row.folder_path)) return row.folder_path;
+    }
+  }
+  return null;
+}
+
 /** Existing folder for a season ("Season 01", "S2", "Specials"), else a new one. */
 function seasonDir(showDir, season, pad) {
   for (const name of dirsIn(showDir)) {
@@ -715,6 +749,7 @@ export async function planImport({
     const showDir = inPlace
       ? null
       : (g.home && isInside(g.home, roots.tv) && g.home) ||
+        libraryShowDir(roots.tv, g) ||
         existingTitleDir(roots.tv, g.title) ||
         join(roots.tv, showFolderName(g, opts.tv));
     for (const it of g.items) {

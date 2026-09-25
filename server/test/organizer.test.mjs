@@ -282,3 +282,40 @@ test('rename only needs no destination folders at all', async () => {
   const job = o.startPlan({ source: mine, options: { mode: 'rename', useTmdb: false } });
   assert.ok(job, 'a preview should start without tvRoot or movieRoot');
 });
+
+test('a new episode joins the folder the series already lives in', async () => {
+  // From a real library: the series sits in a hand-named folder ("Monarch S2")
+  // and is matched to "Monarch: Legacy of Monsters". Organizing a new episode
+  // made a second folder under the official name, splitting one series in two.
+  const db = (await import('../src/db.js')).db;
+  const dest = join(work, 'Split Test');
+  const tvRoot = join(dest, 'TV Series');
+  const existing = join(tvRoot, 'Monarch S2');
+  touch(join(existing, 'Season 02', 'Monarch.S02E01.mkv'), 'a');
+
+  db.prepare(
+    `INSERT INTO shows (id, library_id, folder_path, folder_name, title, sort_title, tmdb_id, tmdb_status)
+     VALUES ('split-show', NULL, ?, 'Monarch S2', 'Monarch: Legacy of Monsters', ?, 202411, 'matched')`
+  ).run(existing, 'monarch: legacy of monsters');
+
+  const src = join(work, 'Split Source');
+  touch(join(src, 'Monarch.Legacy.of.Monsters.S02E06.720p.WEBRip.x265.mkv'), 'b');
+
+  const plan = await o.planImport({
+    source: src,
+    tvRoot,
+    movieRoot: join(dest, 'Movies'),
+    settleMs: 0,
+    options: { useTmdb: false },
+  });
+
+  const item = plan.items.find((i) => /S02E06/i.test(i.from));
+  assert.ok(item, 'the episode should be planned');
+  assert.equal(
+    dirname(dirname(item.to)),
+    existing,
+    `it should join ${existing}, not ${dirname(dirname(item.to))}`
+  );
+
+  db.prepare("DELETE FROM shows WHERE id = 'split-show'").run();
+});
