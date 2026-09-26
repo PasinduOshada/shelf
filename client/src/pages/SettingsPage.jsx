@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, plural } from '../api';
+import { api, plural, scanWithProgress } from '../api';
 import { Badge, SectionTitle, Spinner, EmptyState, ProgressBar } from '../components/Bits';
 import { primaryBtn, ghostBtn } from '../components/DetailHero';
 import ThemePanel from '../components/ThemePanel';
@@ -56,7 +56,7 @@ export default function SettingsPage() {
     setBusy('scan');
     setMessage(null);
     try {
-      const stats = await api.scan();
+      const stats = await scanWithProgress(setScanning);
       const skipped = stats.skipped
         ? ` ${stats.skipped} clip${stats.skipped === 1 ? '' : 's'} left out.`
         : '';

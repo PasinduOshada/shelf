@@ -183,6 +183,25 @@ export const api = {
 };
 
 /** "1 episode", "3 episodes": the noun agrees with the number. */
+/**
+ * Scan, reporting progress while it runs. The scan itself is one request that
+ * takes as long as it takes; this asks the server where it has got to so the
+ * window can say something more useful than "working".
+ */
+export async function scanWithProgress(onProgress, libraryId) {
+  const ticking = setInterval(() => {
+    api.scanStatus()
+      .then((s) => onProgress(s.running ? s : null))
+      .catch(() => {});
+  }, 500);
+  try {
+    return await api.scan(libraryId);
+  } finally {
+    clearInterval(ticking);
+    onProgress(null);
+  }
+}
+
 export function plural(n, one, many = one + 's') {
   return `${n} ${n === 1 ? one : many}`;
 }

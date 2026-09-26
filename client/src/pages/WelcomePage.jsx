@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import Mark from '../components/Mark';
 import { Link, useNavigate } from 'react-router-dom';
-import { api, plural } from '../api';
+import { api, plural, scanWithProgress } from '../api';
 import { Badge, ProgressBar, Spinner } from '../components/Bits';
 import { primaryBtn, ghostBtn } from '../components/DetailHero';
 import FolderPicker from '../components/FolderPicker';
@@ -40,6 +40,7 @@ export default function WelcomePage() {
   const [picking, setPicking] = useState(null);
   const [phase, setPhase] = useState('setup'); // setup | scanning | matching | done
   const [scan, setScan] = useState(null);
+  const [scanning, setScanning] = useState(null);
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
   const [savingKey, setSavingKey] = useState(false);
@@ -97,7 +98,7 @@ export default function WelcomePage() {
     setError(null);
     setPhase('scanning');
     try {
-      setScan(await api.scan());
+      setScan(await scanWithProgress(setScanning));
       if (tmdb?.configured) {
         setJob(await api.enrich());
         setPhase('matching');
@@ -289,7 +290,10 @@ export default function WelcomePage() {
 
               {phase === 'scanning' && (
                 <div role="status" className="flex items-center gap-2.5 text-[13px] text-ink">
-                  <Spinner /> Reading your folders
+                  <Spinner />
+                  {scanning?.total
+                    ? `Reading your folders — ${scanning.done} of ${scanning.total}${scanning.current ? `, ${scanning.current}` : ''}`
+                    : 'Reading your folders'}
                 </div>
               )}
 

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
-import { api, formatClock } from '../api';
+import { api, formatClock, scanWithProgress } from '../api';
 import { Spinner } from './Bits';
 import { applyTheme } from '../themes';
 import { Toaster } from './MediaActions';
@@ -129,6 +129,7 @@ function ShortcutHelp({ onClose }) {
 export default function Layout() {
   const [search, setSearch] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(null);
   const [waiting, setWaiting] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [help, setHelp] = useState(false);
@@ -237,7 +238,7 @@ export default function Layout() {
   async function runScan() {
     setScanning(true);
     try {
-      await api.scan();
+      await scanWithProgress(setScanProgress);
       window.dispatchEvent(new CustomEvent('shelf:refresh'));
     } finally {
       setScanning(false);
@@ -298,7 +299,11 @@ export default function Layout() {
           className="flex items-center justify-center gap-2 rounded border border-edge px-3 py-2 font-mono text-[11px] uppercase tracking-wider text-ink-dim transition hover:border-accent/40 hover:text-ink disabled:opacity-50"
         >
           {scanning ? <Spinner /> : null}
-          {scanning ? 'Scanning' : 'Rescan'}
+          {scanning
+            ? scanProgress?.total
+              ? `Scanning ${scanProgress.done}/${scanProgress.total}`
+              : 'Scanning'
+            : 'Rescan'}
         </button>
       </div>
     </>
