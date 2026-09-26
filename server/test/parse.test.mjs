@@ -61,3 +61,22 @@ test('folder names', () => {
   assert.equal(parseFolderName('Reacher Season 3').title, 'Reacher');
   assert.equal(parseFolderName('Monarch S2').title, 'Monarch');
 });
+
+test('initialisms keep their capitals', async () => {
+  // From real libraries: lower casing "M*A*S*H" and capitalising the first
+  // letter gives "M*a*s*h", and "S.W.A.T" becomes "S W a T" once the dots are
+  // spaces, because "a" is a small word.
+  const { smartCase } = await import('../src/organizer.js');
+
+  assert.equal(smartCase('m*a*s*h'), 'M*A*S*H');
+  assert.equal(smartCase('M*A*S*H'), 'M*A*S*H');
+  assert.equal(smartCase('s w a t'), 'S W A T');
+  assert.equal(smartCase('u.n.c.l.e'), 'U.N.C.L.E');
+  assert.equal(smartCase('the man from u.n.c.l.e'), 'The Man From U.N.C.L.E');
+
+  // Ordinary titles are left as they were.
+  assert.equal(smartCase('the last of us'), 'The Last of Us');
+  assert.equal(smartCase('THE BEAR'), 'The Bear');
+  assert.equal(smartCase('a knight of the seven kingdoms'), 'A Knight of the Seven Kingdoms');
+  assert.equal(smartCase('Dune: Part Two'), 'Dune: Part Two');
+});

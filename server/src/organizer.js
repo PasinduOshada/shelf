@@ -63,13 +63,25 @@ export function normalizeOptions(input = {}) {
 const SMALL_WORDS = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'of', 'on', 'or', 'the', 'to', 'vs']);
 
 /** "the last of us" -> "The Last of Us". Leaves mixed-case titles alone. */
+// Single letters joined by punctuation: M*A*S*H, S.W.A.T, U.N.C.L.E. Lower
+// casing these and capitalising the first letter gives "M*a*s*h".
+const INITIALISM = /^(?:[a-z][.*_·-])+[a-z]?$/i;
+
 export function smartCase(title) {
   const s = String(title || '').trim();
   if (!s || (s !== s.toLowerCase() && s !== s.toUpperCase())) return s;
-  return s
-    .toLowerCase()
-    .split(' ')
-    .map((w, i) => (i > 0 && SMALL_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)))
+
+  const words = s.toLowerCase().split(' ');
+  // "S W A T" arrives as four one-letter words once dots become spaces, and
+  // "a" is a small word, which would leave it lower case in the middle.
+  const allInitials = words.length > 1 && words.every((w) => w.length === 1);
+
+  return words
+    .map((w, i) => {
+      if (INITIALISM.test(w) || allInitials) return w.toUpperCase();
+      if (i > 0 && SMALL_WORDS.has(w)) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    })
     .join(' ');
 }
 
