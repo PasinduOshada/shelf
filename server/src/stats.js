@@ -6,6 +6,11 @@ function parseJson(s, fallback) {
 }
 
 /** Headline numbers for the dashboard. */
+/** "2026-09-27" for the day this moment falls on where the viewer is. */
+function localDay(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 export function overview() {
   const one = (sql, ...p) => db.prepare(sql).get(...p);
 
@@ -50,7 +55,7 @@ export function overview() {
 /** Per-day watch minutes over a window, for the activity chart. */
 export function activity(days = 90) {
   const rows = db.prepare(`
-    SELECT date(watched_at) AS day,
+    SELECT date(watched_at, 'localtime') AS day,
            COUNT(*) AS items,
            COALESCE(SUM(minutes),0) AS minutes
     FROM watch_history
@@ -61,7 +66,7 @@ export function activity(days = 90) {
   const byDay = new Map(rows.map((r) => [r.day, r]));
   const out = [];
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const d = localDay(new Date(Date.now() - i * 86400000));
     const hit = byDay.get(d);
     out.push({ day: d, items: hit?.items ?? 0, minutes: hit?.minutes ?? 0 });
   }
@@ -103,7 +108,7 @@ export function summaries() {
 /** Longest and current consecutive-day watching streak. */
 export function streaks() {
   const days = db.prepare(
-    'SELECT DISTINCT date(watched_at) d FROM watch_history ORDER BY d'
+    "SELECT DISTINCT date(watched_at, 'localtime') d FROM watch_history ORDER BY d"
   ).all().map((r) => r.d);
 
   if (!days.length) return { current: 0, longest: 0, last_watched: null };
@@ -119,8 +124,8 @@ export function streaks() {
   }
 
   // Current streak counts back from today or yesterday.
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const todayStr = localDay();
+  const yesterdayStr = localDay(new Date(Date.now() - 86400000));
   const last = days[days.length - 1];
   let current = 0;
   if (last === todayStr || last === yesterdayStr) {
@@ -194,7 +199,7 @@ export function wrapped(year = new Date().getFullYear()) {
            COUNT(DISTINCT show_id) shows,
            COALESCE(SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END), 0) movies,
            COALESCE(SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END), 0) episodes,
-           COUNT(DISTINCT date(watched_at)) active_days
+           COUNT(DISTINCT date(watched_at, 'localtime')) active_days
     FROM watch_history WHERE watched_at >= ? AND watched_at < ?
   `).get(...p);
 
@@ -207,14 +212,14 @@ export function wrapped(year = new Date().getFullYear()) {
   `).all(...p);
 
   const byMonth = db.prepare(`
-    SELECT strftime('%m', watched_at) month, COUNT(*) items,
+    SELECT strftime('%m', watched_at, 'localtime') month, COUNT(*) items,
            COALESCE(SUM(minutes),0) minutes
     FROM watch_history WHERE watched_at >= ? AND watched_at < ?
     GROUP BY month ORDER BY month
   `).all(...p);
 
   const busiestDay = db.prepare(`
-    SELECT date(watched_at) day, COUNT(*) items, COALESCE(SUM(minutes),0) minutes
+    SELECT date(watched_at, 'localtime') day, COUNT(*) items, COALESCE(SUM(minutes),0) minutes
     FROM watch_history WHERE watched_at >= ? AND watched_at < ?
     GROUP BY day ORDER BY minutes DESC LIMIT 1
   `).get(...p);
@@ -262,8 +267,8 @@ export function periods(unit = 'week', count = 12) {
   const weekly = unit !== 'month';
   const rows = db.prepare(`
     SELECT ${weekly
-      ? "date(watched_at, 'weekday 0', '-6 days')"
-      : "strftime('%Y-%m-01', watched_at)"} AS start,
+      ? "date(watched_at, 'localtime', 'weekday 0', '-6 days')"
+      : "strftime('%Y-%m-01', watched_at, 'localtime')"} AS start,
       COUNT(*) AS items,
       COALESCE(SUM(minutes), 0) AS minutes,
       COALESCE(SUM(CASE WHEN kind = 'movie' THEN 1 ELSE 0 END), 0) AS movies,

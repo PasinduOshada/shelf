@@ -344,3 +344,29 @@ test('search finds a series by an episode name', async () => {
   db2.prepare("DELETE FROM shows WHERE id = 'srch-show'").run();
   db2.prepare("DELETE FROM movies WHERE id = 'srch-film'").run();
 });
+
+test('a late night counts as that night, not the day before', async () => {
+  // Times are stored in UTC. Grouping by the UTC day put anything watched
+  // after midnight, anywhere east of Greenwich, on the previous day: wrong bar
+  // on the chart, wrong heading in the timeline, and a broken streak.
+  const stats = await import('../src/stats.js');
+  const db2 = (await import('../src/db.js')).db;
+  db2.exec('DELETE FROM watch_history');
+
+  // 01:30 this morning, wherever this machine is.
+  const when = new Date();
+  when.setHours(1, 30, 0, 0);
+  const asUtc = when.toISOString().slice(0, 19).replace('T', ' ');
+  const theirDay = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}`;
+
+  db2.prepare(
+    `INSERT INTO watch_history (id, kind, minutes, watched_at) VALUES ('tz-late', 'episode', 42, ?)`
+  ).run(asUtc);
+
+  const today = stats.activity(3).at(-1);
+  assert.equal(today.day, theirDay, 'the last bar should be today where the viewer is');
+  assert.equal(today.items, 1, `the watch landed on ${stats.activity(3).map((a) => a.day + ':' + a.items).join(' ')}`);
+  assert.equal(stats.streaks().last_watched, theirDay, 'the streak should count it as today');
+
+  db2.exec("DELETE FROM watch_history WHERE id = 'tz-late'");
+});

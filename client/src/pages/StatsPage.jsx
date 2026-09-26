@@ -137,18 +137,27 @@ function Trend({ data, unit }) {
   );
 }
 
+// Times arrive in UTC with no zone on them. An episode watched at one in the
+// morning belongs to that night, not to the day before.
+function localDay(value) {
+  const d = new Date(String(value).replace(' ', 'T') + 'Z');
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 /** What you watched and when, newest first, grouped by day. */
 function Timeline({ rows }) {
   if (!rows.length) return <p className="text-[13px] text-ink-dim">Nothing watched yet.</p>;
   const days = [];
   for (const r of rows) {
-    const day = String(r.watched_at).slice(0, 10);
+    const day = localDay(r.watched_at);
     if (!days.length || days[days.length - 1].day !== day) days.push({ day, items: [] });
     days[days.length - 1].items.push(r);
   }
   const label = (d) => {
     const date = new Date(d + 'T12:00:00');
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     if (d === today) return 'Today';
     return date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
   };
