@@ -192,8 +192,8 @@ export function wrapped(year = new Date().getFullYear()) {
   const totals = db.prepare(`
     SELECT COUNT(*) items, COALESCE(SUM(minutes),0) minutes,
            COUNT(DISTINCT show_id) shows,
-           SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END) movies,
-           SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END) episodes,
+           COALESCE(SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END), 0) movies,
+           COALESCE(SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END), 0) episodes,
            COUNT(DISTINCT date(watched_at)) active_days
     FROM watch_history WHERE watched_at >= ? AND watched_at < ?
   `).get(...p);
@@ -266,8 +266,8 @@ export function periods(unit = 'week', count = 12) {
       : "strftime('%Y-%m-01', watched_at)"} AS start,
       COUNT(*) AS items,
       COALESCE(SUM(minutes), 0) AS minutes,
-      SUM(CASE WHEN kind = 'movie' THEN 1 ELSE 0 END) AS movies,
-      SUM(CASE WHEN kind = 'episode' THEN 1 ELSE 0 END) AS episodes,
+      COALESCE(SUM(CASE WHEN kind = 'movie' THEN 1 ELSE 0 END), 0) AS movies,
+      COALESCE(SUM(CASE WHEN kind = 'episode' THEN 1 ELSE 0 END), 0) AS episodes,
       COUNT(DISTINCT show_id) AS shows
     FROM watch_history
     GROUP BY start

@@ -134,6 +134,17 @@ test('specials never lead the "watch next" queue', async () => {
   assert.equal(next.episode_number, 1, 'wrong episode offered');
 });
 
+test('a quiet year in Wrapped counts zero, not null', async () => {
+  // Same trap as the weekly figures: SUM() over no rows is NULL, and the page
+  // printed "null films" for any year with nothing in it.
+  const stats = await import('../src/stats.js');
+  const quiet = stats.wrapped(1999).totals;
+  assert.equal(quiet.movies, 0);
+  assert.equal(quiet.episodes, 0);
+  assert.equal(quiet.items, 0);
+  assert.equal(quiet.hours, 0);
+});
+
 test('a week with nothing watched counts zero, not null', async () => {
   // SUM() over no rows is NULL in SQLite, which reached the screen as
   // "null episodes - null films".
