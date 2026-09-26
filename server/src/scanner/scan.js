@@ -507,7 +507,22 @@ async function scanMovieLibrary(library, stats, excludes) {
   }
 }
 
-export async function scanLibraries({ libraryId = null } = {}) {
+// Scans yield now, so two can overlap: the sidebar's Rescan while a finished
+// download triggers one, say. They do not corrupt anything - every write is an
+// upsert - but they repeat each other's work and share one progress count, so
+// they take their turn instead.
+let queue = Promise.resolve();
+
+export function scanLibraries(options = {}) {
+  const run = queue.then(() => scanOnce(options), () => scanOnce(options));
+  queue = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
+
+async function scanOnce({ libraryId = null } = {}) {
   const libs = libraryId
     ? db.prepare('SELECT * FROM libraries WHERE id = ?').all(libraryId)
     : db.prepare('SELECT * FROM libraries WHERE enabled = 1').all();

@@ -260,3 +260,26 @@ test('a scan lets the app breathe, and says where it has got to', async () => {
   assert.ok(seen.at(-1) >= seen[0], 'progress should move forward');
   assert.equal(scanner.scanStatus().running, false, 'it should say it has finished');
 });
+
+test('two scans at once take their turn rather than racing', async () => {
+  // Scanning yields to the event loop now, so overlapping runs are possible in
+  // a way they were not before: Rescan while a finished download triggers one.
+  const both = join(work, 'Both At Once');
+  for (let n = 1; n <= 4; n++) file(join(both, `Show ${n}`, 'Season 01', `Show.${n}.S01E01.1080p.mkv`));
+  scanner.addLibrary({ path: both, kind: 'tv' });
+
+  const seenRunning = [];
+  const beat = setInterval(() => {
+    const s = scanner.scanStatus();
+    if (s.running) seenRunning.push(s.done);
+  }, 5);
+  const [a, b] = await Promise.all([scanner.scanLibraries(), scanner.scanLibraries()]);
+  clearInterval(beat);
+
+  assert.equal(a.shows, b.shows, 'both runs should agree on what they found');
+  const rows = db.db.prepare('SELECT COUNT(*) c FROM files WHERE path LIKE ?').get(both + '%').c;
+  assert.equal(rows, 4, `each file should be indexed once, found ${rows}`);
+  // Progress belongs to one run at a time: it never counts past its own total.
+  const status = scanner.scanStatus();
+  assert.equal(status.running, false);
+});
