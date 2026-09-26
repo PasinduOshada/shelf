@@ -89,6 +89,12 @@ test('builds names from the chosen parts only', () => {
   assert.equal(o.movieFileBase(film, { year: false, quality: false }), 'Alien - Romulus');
   assert.equal(o.safeName("Don't F**k with Cats: Hunting an Internet Killer"), "Don't Fuck with Cats - Hunting an Internet Killer");
   assert.equal(o.safeName('What If...?'), 'What If');
+  // A slash separates words; dropping it ran them together as "FaceOff".
+  assert.equal(o.safeName('Face/Off'), 'Face Off');
+  // A leading dot would make a hidden file, and the next scan skips those.
+  assert.equal(o.safeName('.hack//Sign'), 'hack Sign');
+  // Punctuation all the way down still has to be called something.
+  assert.equal(o.safeName('???'), 'Untitled');
   // TMDB placeholder names are left out.
   assert.equal(
     o.episodeFileBase({ ...ep, episodeTitle: 'Episode 1' }, { episodeTitle: true, quality: false }),

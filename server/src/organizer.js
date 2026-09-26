@@ -91,16 +91,22 @@ export function smartCase(title) {
  * characters Windows forbids are dropped, as are trailing dots and spaces.
  */
 export function safeName(name) {
-  return String(name)
+  const out = String(name)
     .replace(/\bf\*+k/gi, (m) => `${m[0]}uck`)
     .replace(/\bf\*+ing/gi, (m) => `${m[0]}ucking`)
     .replace(/\bsh\*+t/gi, (m) => `${m[0]}hit`)
     .replace(/\s*:\s+/g, ' - ')
-    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '')
+    // A slash separates words rather than joining them: "Face/Off" is two.
+    .replace(/\s*[/\\]\s*/g, ' ')
+    .replace(/[<>:"|?*\x00-\x1f]/g, '')
     .replace(/\s{2,}/g, ' ')
     .replace(/(?: - )+/g, ' - ')
+    // A leading dot makes a hidden file, which the next scan would skip.
+    .replace(/^[. ]+/, '')
     .replace(/[. ]+$/, '')
     .trim();
+  // A title of nothing but punctuation would otherwise name a file "".
+  return out || 'Untitled';
 }
 
 // TMDB's stand-in names add nothing to a file name.

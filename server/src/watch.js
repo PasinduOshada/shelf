@@ -143,7 +143,7 @@ export function setShowWatched(showId, { season = null, watched = true, upTo = n
     filters.push('(e.season_number < ? OR (e.season_number = ? AND e.episode_number <= ?))');
     args.push(upTo.season, upTo.season, upTo.episode);
   }
-  filters.push("(e.air_date IS NULL OR e.air_date <= date('now'))");
+  filters.push("(e.air_date IS NULL OR e.air_date <= date('now', 'localtime'))");
 
   const eps = db.prepare(`SELECT e.* FROM episodes e WHERE ${filters.join(' AND ')}`).all(...args);
 

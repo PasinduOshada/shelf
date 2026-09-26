@@ -328,20 +328,26 @@ export function upcoming(days = 90) {
     FROM episodes e
     JOIN shows s ON s.id = e.show_id
     WHERE e.air_date IS NOT NULL
-      AND e.air_date > date('now')
-      AND e.air_date <= date('now', '+' || ? || ' days')
+      -- Air dates are calendar days where the viewer is, not in UTC: without
+      -- 'localtime' an episode airing today is still "upcoming" all evening
+      -- east of Greenwich, and tomorrow's is already here in the Americas.
+      AND e.air_date > date('now', 'localtime')
+      AND e.air_date <= date('now', 'localtime', '+' || ? || ' days')
       -- What is coming for a series you dropped is not news you asked for.
       AND COALESCE(s.user_status, '') != 'dropped'
     ORDER BY e.air_date, s.sort_title
   `).all(days);
 
-  const now = Date.now();
+  // Whole days between two calendar dates, so "tomorrow" reads as 1 whether
+  // it is asked at breakfast or at one in the morning.
+  const now = new Date();
+  const todayMs = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
   return rows.map((r) => {
     const airMs = new Date(r.air_date + 'T00:00:00Z').getTime();
     return {
       ...r,
       poster: r.custom_poster || (r.poster_path ? `tmdb:${r.poster_path}` : null),
-      days_until: Math.max(0, Math.ceil((airMs - now) / 86400000)),
+      days_until: Math.max(0, Math.round((airMs - todayMs) / 86400000)),
     };
   });
 }
@@ -362,7 +368,7 @@ export function missingReport() {
     JOIN shows s ON s.id = e.show_id
     -- TMDB rows with no date are announced but unscheduled, so they don't
     -- count; rows the scanner created from a file have no date but do exist.
-    WHERE (e.air_date <= date('now') OR (e.air_date IS NULL AND e.tmdb_id IS NULL))
+    WHERE (e.air_date <= date('now', 'localtime') OR (e.air_date IS NULL AND e.tmdb_id IS NULL))
       -- Specials (season 0) only count once the library holds at least one.
       AND (e.season_number > 0 OR EXISTS (
         SELECT 1 FROM files f0
