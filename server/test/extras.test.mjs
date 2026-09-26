@@ -4,7 +4,7 @@
 // No network, no real files outside a temp folder.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
@@ -369,6 +369,31 @@ test('a late night counts as that night, not the day before', async () => {
   assert.equal(stats.streaks().last_watched, theirDay, 'the streak should count it as today');
 
   db2.exec("DELETE FROM watch_history WHERE id = 'tz-late'");
+});
+
+test('a poster nothing points at any more is not kept for ever', async () => {
+  const { UPLOADS_DIR } = await import('../src/paths.js');
+  const { tidyStorage, dropUpload } = await import('../src/storage.js');
+  const db2 = (await import('../src/db.js')).db;
+  mkdirSync(UPLOADS_DIR, { recursive: true });
+
+  const keep = join(UPLOADS_DIR, 'in-use.jpg');
+  const orphan = join(UPLOADS_DIR, 'replaced.jpg');
+  for (const file of [keep, orphan]) {
+    writeFileSync(file, 'x');
+    // Fresh uploads are left alone in case a row is still being written.
+    const old = new Date(Date.now() - 86_400_000);
+    utimesSync(file, old, old);
+  }
+  db2.prepare("INSERT INTO movies (id, title, sort_title, custom_poster) VALUES ('poster-owner', 'Heat', 'heat', '/uploads/in-use.jpg')").run();
+
+  tidyStorage();
+  assert.ok(existsSync(keep), 'the poster a film is using stays');
+  assert.ok(!existsSync(orphan), 'the one nothing refers to goes');
+
+  dropUpload('/uploads/in-use.jpg');
+  assert.ok(!existsSync(keep), 'clearing a poster takes the file with it');
+  db2.prepare("DELETE FROM movies WHERE id = 'poster-owner'").run();
 });
 
 test('an absurd chart window is trimmed instead of eating all the memory', async () => {

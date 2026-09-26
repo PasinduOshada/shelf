@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db, setSetting, getSetting, sortTitle, transaction } from '../db.js';
 import { UPLOADS_DIR } from '../paths.js';
+import { dropUpload } from '../storage.js';
 import { scanLibraries, addLibrary, scanStatus } from '../scanner/scan.js';
 import * as q from '../queries.js';
 import {
@@ -37,6 +38,18 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => cb(null, Boolean(EXT_BY_MIME[file.mimetype])),
 });
+
+/**
+ * Point a row at a poster, or at nothing, and delete the picture it used to
+ * have. Without that, every replaced poster stayed on disk for good.
+ */
+function setPoster(table, id, url) {
+  const row = db.prepare(`SELECT custom_poster FROM ${table} WHERE id = ?`).get(id);
+  if (!row) return false;
+  db.prepare(`UPDATE ${table} SET custom_poster = ? WHERE id = ?`).run(url, id);
+  if (row.custom_poster !== url) dropUpload(row.custom_poster);
+  return true;
+}
 
 // ---------------------------------------------------------------- libraries
 
@@ -189,12 +202,15 @@ router.patch('/shows/:id', (req, res) => {
 router.post('/shows/:id/poster', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
   const url = `/uploads/${req.file.filename}`;
-  db.prepare('UPDATE shows SET custom_poster = ? WHERE id = ?').run(url, req.params.id);
+  if (!setPoster('shows', req.params.id, url)) {
+    dropUpload(url);
+    return res.status(404).json({ error: 'Show not found' });
+  }
   res.json({ custom_poster: url });
 });
 
 router.delete('/shows/:id/poster', (req, res) => {
-  db.prepare('UPDATE shows SET custom_poster = NULL WHERE id = ?').run(req.params.id);
+  setPoster('shows', req.params.id, null);
   res.json({ ok: true });
 });
 
@@ -235,12 +251,15 @@ router.patch('/movies/:id', (req, res) => {
 router.post('/movies/:id/poster', upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No image uploaded' });
   const url = `/uploads/${req.file.filename}`;
-  db.prepare('UPDATE movies SET custom_poster = ? WHERE id = ?').run(url, req.params.id);
+  if (!setPoster('movies', req.params.id, url)) {
+    dropUpload(url);
+    return res.status(404).json({ error: 'Movie not found' });
+  }
   res.json({ custom_poster: url });
 });
 
 router.delete('/movies/:id/poster', (req, res) => {
-  db.prepare('UPDATE movies SET custom_poster = NULL WHERE id = ?').run(req.params.id);
+  setPoster('movies', req.params.id, null);
   res.json({ ok: true });
 });
 
