@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api';
+import { api, formatRuntime, plural } from '../api';
 import { Poster, EmptyState, Spinner } from '../components/Bits';
 import { primaryBtn } from '../components/DetailHero';
 
@@ -35,7 +35,7 @@ function MonthChart({ months }) {
     <div>
       <div className="mono mb-2 flex justify-between text-[10px] text-ink-dim">
         <span>hours per month</span>
-        <span>peak {(max / 60).toFixed(1)}h</span>
+        <span>peak {formatRuntime(max)}</span>
       </div>
       <div className="relative h-44">
         <div className="absolute inset-x-0 top-0 border-t border-dashed border-edge" />
@@ -43,7 +43,7 @@ function MonthChart({ months }) {
           {months.map((m) => (
             <div
               key={m.month}
-              title={`${MONTHS[m.month - 1]} · ${(m.minutes / 60).toFixed(1)}h`}
+              title={`${MONTHS[m.month - 1]} · ${formatRuntime(m.minutes) || 'nothing'}`}
               className="flex-1 rounded-t-[2px] bg-gradient-to-t from-accent/45 to-accent"
               style={{ height: m.minutes ? `${Math.max(2, (m.minutes / max) * 100)}%` : 0 }}
             />
@@ -132,8 +132,15 @@ export default function WrappedPage() {
         <>
           <Credits
             items={[
-              { label: 'Hours', value: data.totals.hours, sub: `${data.totals.days} days of your life` },
-              { label: 'Episodes', value: data.totals.episodes, sub: `across ${data.totals.shows} shows` },
+              // Under an hour it is minutes, and half a day is not "0 days".
+              data.totals.minutes < 60
+                ? { label: 'Minutes', value: data.totals.minutes }
+                : {
+                    label: 'Hours',
+                    value: data.totals.hours,
+                    sub: data.totals.days >= 1 ? `${data.totals.days} days of your life` : undefined,
+                  },
+              { label: 'Episodes', value: data.totals.episodes, sub: `across ${plural(data.totals.shows, 'show')}` },
               { label: 'Films', value: data.totals.movies },
               {
                 label: 'Active days',
@@ -173,7 +180,7 @@ export default function WrappedPage() {
                       {s.title}
                     </div>
                     <div className="mono text-[10.5px] text-ink-dim">
-                      {s.episodes} eps · {(s.minutes / 60).toFixed(1)}h
+                      {plural(s.episodes, 'episode')} · {formatRuntime(s.minutes)}
                     </div>
                   </Link>
                 ))}
@@ -189,12 +196,16 @@ export default function WrappedPage() {
                 </h3>
                 <div className="mt-3 flex items-baseline gap-2">
                   <span className="display text-[52px] leading-none tnum text-accent">
-                    {(data.busiestDay.minutes / 60).toFixed(1)}
+                    {data.busiestDay.minutes < 60
+                      ? data.busiestDay.minutes
+                      : (data.busiestDay.minutes / 60).toFixed(1)}
                   </span>
-                  <span className="display text-[15px] uppercase text-ink-dim">hours</span>
+                  <span className="display text-[15px] uppercase text-ink-dim">
+                    {data.busiestDay.minutes < 60 ? 'minutes' : 'hours'}
+                  </span>
                 </div>
                 <div className="mono mt-2 text-[11px] text-ink-dim">
-                  {data.busiestDay.day} · {data.busiestDay.items} things in one sitting
+                  {data.busiestDay.day} · {plural(data.busiestDay.items, 'thing')} in one sitting
                 </div>
               </div>
             )}

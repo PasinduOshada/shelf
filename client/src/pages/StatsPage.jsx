@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, formatBytes, episodeLabel, plural } from '../api';
+import { api, formatBytes, formatRuntime, episodeLabel, plural } from '../api';
 import { Badge, Spinner, EmptyState } from '../components/Bits';
 import { FigureStrip, primaryBtn } from '../components/DetailHero';
 
@@ -35,7 +35,7 @@ function ActivityChart({ data }) {
     <div>
       <div className="mono mb-2 flex justify-between text-[10px] text-ink-dim">
         <span>minutes watched per day</span>
-        <span>peak {(max / 60).toFixed(1)}h</span>
+        <span>peak {formatRuntime(max)}</span>
       </div>
       <div className="relative h-32">
         <div className="absolute inset-x-0 top-0 border-t border-dashed border-edge" />
@@ -87,8 +87,13 @@ function Summary({ title, now, before }) {
   return (
     <Panel title={title} aside={<Delta now={now.minutes} before={before.minutes} />}>
       <div className="flex items-baseline gap-2">
-        <span className="display text-[44px] leading-none tnum text-ink">{now.hours}</span>
-        <span className="display text-[15px] uppercase text-ink-dim">hours</span>
+        {/* Three quarters of an hour is "45 minutes", not "0.8 hours". */}
+        <span className="display text-[44px] leading-none tnum text-ink">
+          {now.minutes < 60 ? now.minutes : now.hours}
+        </span>
+        <span className="display text-[15px] uppercase text-ink-dim">
+          {now.minutes < 60 ? 'minutes' : 'hours'}
+        </span>
       </div>
       <div className="mono mt-2 text-[11px] text-ink-dim">
         {plural(now.episodes, 'episode')} · {plural(now.movies, 'film')} · {plural(now.shows, 'show')}
@@ -99,7 +104,7 @@ function Summary({ title, now, before }) {
             items={now.top}
             valueKey="minutes"
             labelKey="title"
-            format={(m) => `${(m / 60).toFixed(1)}h`}
+            format={(m) => formatRuntime(m) || '0m'}
           />
         </div>
       )}
@@ -120,7 +125,7 @@ function Trend({ data, unit }) {
     <div>
       <div className="flex items-end gap-1.5" style={{ height: 132 }}>
         {data.map((p) => (
-          <div key={p.start} className="flex min-w-0 flex-1 flex-col justify-end" title={`${p.hours}h · ${plural(p.episodes, 'episode')} · ${plural(p.movies, 'film')}`}>
+          <div key={p.start} className="flex min-w-0 flex-1 flex-col justify-end" title={`${formatRuntime(p.minutes) || 'nothing'} · ${plural(p.episodes, 'episode')} · ${plural(p.movies, 'film')}`}>
             <div
               className={`rounded-t ${p.minutes ? 'bg-accent/70' : 'bg-edge'}`}
               style={{ height: `${p.minutes ? Math.max(4, (p.minutes / max) * 118) : 2}px` }}
@@ -130,7 +135,7 @@ function Trend({ data, unit }) {
       </div>
       <div className="mono mt-2 flex justify-between text-[10px] text-ink-dim">
         <span>{fmt(data[0]?.start || '')}</span>
-        <span className="text-ink">peak {(max / 60).toFixed(1)}h</span>
+        <span className="text-ink">peak {formatRuntime(max)}</span>
         <span>{fmt(data[data.length - 1]?.start || '')}</span>
       </div>
     </div>
@@ -226,14 +231,19 @@ export default function StatsPage() {
           <div className="mono text-[10px] uppercase tracking-[0.22em] text-accent">Your viewing</div>
           <div className="mt-3 flex items-end gap-4">
             <span className="display text-[clamp(72px,9vw,116px)] leading-[0.8] tnum text-accent">
-              {overview.watched.hours}
-              <span className="text-[0.38em] text-ink-dim">h</span>
+              {/* Under an hour, "1h" would be rounding 44 minutes up a long way. */}
+              {overview.watched.minutes < 60 ? overview.watched.minutes : overview.watched.hours}
+              <span className="text-[0.38em] text-ink-dim">
+                {overview.watched.minutes < 60 ? 'm' : 'h'}
+              </span>
             </span>
             <div className="pb-1.5">
               <div className="display text-[15px] uppercase tracking-wide text-ink">watched</div>
-              <div className="mono mt-0.5 text-[11px] text-ink-dim">
-                {overview.watched.days} days of your life
-              </div>
+              {overview.watched.days >= 1 && (
+                <div className="mono mt-0.5 text-[11px] text-ink-dim">
+                  {overview.watched.days} days of your life
+                </div>
+              )}
             </div>
           </div>
         </div>
