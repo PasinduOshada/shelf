@@ -21,6 +21,17 @@ const isSeasonDir = (name) => SEASON_DIR.test(name) || SPECIALS_DIR.test(name);
 // Set for the library being scanned; hidden entries are never walked into.
 let isHidden = nothingHidden;
 
+// The server lives in the desktop app's own process, so a scan that never
+// gives the event loop a turn freezes the whole window: no clicks, no tray, no
+// answer to anything. Work is committed in batches with a breath between them.
+let progress = { running: false, phase: null, done: 0, total: 0, current: null };
+
+export function scanStatus() {
+  return { ...progress };
+}
+
+const breathe = () => new Promise((resolve) => setImmediate(resolve));
+
 function normalize(p) {
   return String(p).replace(/[\\/]+/g, '/').toLowerCase();
 }
@@ -324,7 +335,7 @@ function scanGroupFolder(library, dir, stats, excludes) {
   }
 }
 
-function scanTvLibrary(library, stats, excludes) {
+async function scanTvLibrary(library, stats, excludes) {
   const found = { roots: [], groups: [] };
   for (const folderName of listDirs(library.path)) {
     collectShowRoots(join(library.path, folderName), excludes, found);
@@ -333,7 +344,12 @@ function scanTvLibrary(library, stats, excludes) {
   // Deepest first, so a file is claimed by the most specific show root.
   roots.sort((a, b) => b.length - a.length);
 
+  progress.total += roots.length + found.groups.length;
+
   for (const showRoot of roots) {
+    progress.current = basename(showRoot);
+    progress.done++;
+    await breathe();
     // Which files this root actually owns, decided before anything is created:
     // a folder whose only videos are clips or phone exports is not a show.
     const owned = [];
@@ -355,6 +371,7 @@ function scanTvLibrary(library, stats, excludes) {
     }
     if (!owned.length) continue;
 
+    transaction(() => {
     const show = upsertShow({
       libraryId: library.id,
       folderPath: showRoot,
@@ -401,38 +418,59 @@ function scanTvLibrary(library, stats, excludes) {
       }
       stats.files++;
     }
+    });
   }
 
   // After the shows, so anything a real series claimed is already spoken for.
-  for (const dir of found.groups) scanGroupFolder(library, dir, stats, excludes);
+  for (const dir of found.groups) {
+    progress.current = basename(dir);
+    progress.done++;
+    await breathe();
+    transaction(() => scanGroupFolder(library, dir, stats, excludes));
+  }
 }
 
-function scanMovieLibrary(library, stats, excludes) {
-  for (const filename of listFiles(library.path)) {
-    if (!isVideoFile(filename)) continue;
-    const filePath = join(library.path, filename);
-    if (isExcluded(filePath, excludes)) continue;
-    if (isNotLibraryMedia(filePath, filename)) {
-      stats.skipped++;
-      continue;
-    }
+const FILM_BATCH = 120;
 
-    const parsed = parseFilename(filename);
-    if (!parsed.title) continue;
+async function scanMovieLibrary(library, stats, excludes) {
+  const loose = listFiles(library.path).filter(isVideoFile);
+  const folders = listDirs(library.path);
+  progress.total += Math.ceil(loose.length / FILM_BATCH) + folders.length;
 
-    const movie = upsertMovie({
-      libraryId: library.id, collectionId: null,
-      title: parsed.title, year: parsed.year,
+  for (let at = 0; at < loose.length; at += FILM_BATCH) {
+    progress.current = library.label || basename(library.path);
+    progress.done++;
+    await breathe();
+    transaction(() => {
+      for (const filename of loose.slice(at, at + FILM_BATCH)) {
+        const filePath = join(library.path, filename);
+        if (isExcluded(filePath, excludes)) continue;
+        if (isNotLibraryMedia(filePath, filename)) {
+          stats.skipped++;
+          continue;
+        }
+
+        const parsed = parseFilename(filename);
+        if (!parsed.title) continue;
+
+        const movie = upsertMovie({
+          libraryId: library.id, collectionId: null,
+          title: parsed.title, year: parsed.year,
+        });
+        recordFile({
+          path: filePath, filename, parentDir: library.path, ext: parsed.ext,
+          movieId: movie.id, quality: parsed.quality, codec: parsed.codec, source: parsed.source,
+        });
+        stats.movies++;
+        stats.files++;
+      }
     });
-    recordFile({
-      path: filePath, filename, parentDir: library.path, ext: parsed.ext,
-      movieId: movie.id, quality: parsed.quality, codec: parsed.codec, source: parsed.source,
-    });
-    stats.movies++;
-    stats.files++;
   }
 
-  for (const folderName of listDirs(library.path)) {
+  for (const folderName of folders) {
+    progress.current = folderName;
+    progress.done++;
+    await breathe();
     const dirPath = join(library.path, folderName);
     if (isExcluded(dirPath, excludes)) continue;
 
@@ -446,6 +484,7 @@ function scanMovieLibrary(library, stats, excludes) {
       });
     if (!videoFiles.length) continue;
 
+    transaction(() => {
     const collection = videoFiles.length > 1 ? upsertCollection(folderName) : null;
 
     for (const filePath of videoFiles) {
@@ -464,10 +503,11 @@ function scanMovieLibrary(library, stats, excludes) {
       stats.movies++;
       stats.files++;
     }
+    });
   }
 }
 
-export function scanLibraries({ libraryId = null } = {}) {
+export async function scanLibraries({ libraryId = null } = {}) {
   const libs = libraryId
     ? db.prepare('SELECT * FROM libraries WHERE id = ?').all(libraryId)
     : db.prepare('SELECT * FROM libraries WHERE enabled = 1').all();
@@ -478,6 +518,7 @@ export function scanLibraries({ libraryId = null } = {}) {
     files: 0, extras: 0, subtitles: 0, skipped: 0, missing: 0, unavailable: [], durationMs: 0,
   };
   const started = Date.now();
+  progress = { running: true, phase: 'Reading folders', done: 0, total: 0, current: null };
 
   for (const library of libs) {
     if (!existsSync(library.path)) {
@@ -489,30 +530,34 @@ export function scanLibraries({ libraryId = null } = {}) {
     }
     stats.libraries++;
     isHidden = hiddenFilter([library.path]);
-    transaction(() => {
-      if (library.kind === 'tv') scanTvLibrary(library, stats, excludes);
-      else scanMovieLibrary(library, stats, excludes);
-      db.prepare("UPDATE libraries SET last_scan = datetime('now') WHERE id = ?").run(library.id);
-    });
+    if (library.kind === 'tv') await scanTvLibrary(library, stats, excludes);
+    else await scanMovieLibrary(library, stats, excludes);
+    db.prepare("UPDATE libraries SET last_scan = datetime('now') WHERE id = ?").run(library.id);
   }
 
-  transaction(() => {
-    const outOfReach = stats.unavailable.map((p) => normalize(p));
-    const unreachable = (path) => {
-      const p = normalize(path);
-      return outOfReach.some((root) => p === root || p.startsWith(root + '/'));
-    };
+  const outOfReach = stats.unavailable.map((p) => normalize(p));
+  const unreachable = (path) => {
+    const p = normalize(path);
+    return outOfReach.some((root) => p === root || p.startsWith(root + '/'));
+  };
 
-    for (const row of db.prepare('SELECT id, path FROM files WHERE is_missing = 0').all()) {
-      // Marking a whole library missing because its drive is unplugged would
-      // throw away everything Shelf knows about it, for no reason.
-      if (unreachable(row.path)) continue;
-      if (!existsSync(row.path)) {
-        db.prepare('UPDATE files SET is_missing = 1 WHERE id = ?').run(row.id);
-        stats.missing++;
+  progress.phase = 'Checking what is still there';
+  const known = db.prepare('SELECT id, path FROM files WHERE is_missing = 0').all();
+  const CHECK_BATCH = 400;
+  for (let at = 0; at < known.length; at += CHECK_BATCH) {
+    await breathe();
+    transaction(() => {
+      for (const row of known.slice(at, at + CHECK_BATCH)) {
+        // Marking a whole library missing because its drive is unplugged would
+        // throw away everything Shelf knows about it, for no reason.
+        if (unreachable(row.path)) continue;
+        if (!existsSync(row.path)) {
+          db.prepare('UPDATE files SET is_missing = 1 WHERE id = ?').run(row.id);
+          stats.missing++;
+        }
       }
-    }
-  });
+    });
+  }
 
   isHidden = nothingHidden;
   pruneEmptyShows();
@@ -524,6 +569,7 @@ export function scanLibraries({ libraryId = null } = {}) {
     // Something else is reading; it will fold in later.
   }
   stats.durationMs = Date.now() - started;
+  progress = { running: false, phase: null, done: 0, total: 0, current: null };
   return stats;
 }
 

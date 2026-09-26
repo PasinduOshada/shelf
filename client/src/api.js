@@ -40,6 +40,7 @@ export const api = {
   addLibrary: (body) => req('/libraries', { method: 'POST', body }),
   removeLibrary: (id) => req(`/libraries/${id}`, { method: 'DELETE' }),
   scan: (libraryId) => req('/scan', { method: 'POST', body: { libraryId } }),
+  scanStatus: () => req('/scan/status'),
   browse: (path) => req(`/browse${qs({ path })}`),
 
   shows: (params) => req(`/shows${qs(params)}`),

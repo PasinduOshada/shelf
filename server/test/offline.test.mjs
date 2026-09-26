@@ -67,8 +67,8 @@ after(() => {
   rmSync(work, { recursive: true, force: true });
 });
 
-test('scanning a library needs nothing from the network', () => {
-  const result = scanner.scanLibraries();
+test('scanning a library needs nothing from the network', async () => {
+  const result = await scanner.scanLibraries();
   assert.equal(result.shows, 1);
   assert.equal(result.episodes, 2);
   assert.equal(queries.listShows().length, 1);

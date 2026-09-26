@@ -46,7 +46,7 @@ router.post('/files/:id/trash', handle(async (req) => {
 // ---------------------------------------------------------------- episode corrections
 
 /** Say which episode a file really is ({ season, episode }), or null to undo. */
-router.patch('/files/:id/episode', handle((req) => {
+router.patch('/files/:id/episode', handle(async (req) => {
   const f = db.prepare('SELECT f.*, s.library_id FROM files f JOIN shows s ON s.id = f.show_id WHERE f.id = ?').get(req.params.id);
   if (!f) throw Object.assign(new Error('Only files inside a series can be renumbered'), { status: 404 });
   const { season, episode } = req.body || {};
@@ -57,7 +57,7 @@ router.patch('/files/:id/episode', handle((req) => {
   }
   db.prepare('UPDATE files SET manual_season = ?, manual_episode = ? WHERE id = ?')
     .run(clear ? null : season, clear ? null : episode, f.id);
-  scanLibraries({ libraryId: f.library_id });
+  await scanLibraries({ libraryId: f.library_id });
   return db.prepare('SELECT id, episode_id, manual_season, manual_episode FROM files WHERE id = ?').get(f.id);
 }));
 

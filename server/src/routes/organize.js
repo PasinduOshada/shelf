@@ -63,7 +63,7 @@ router.post('/organize/apply', (req, res) => {
       ids,
       // Paths changed on disk; refresh the index so the library stays truthful.
       afterApply: async (_plan, result) => {
-        scanLibraries();
+        await scanLibraries();
         startProbe();
         fetchSubtitlesFor(result.moved_paths);
       },

@@ -193,7 +193,7 @@ async function pass(config, report, manual) {
   if (sure.length) {
     result = await applyPlan(plan, sure.map((i) => i.id), { onProgress });
     // Paths changed on disk; bring the library up to date.
-    scanLibraries();
+    await scanLibraries();
     startProbe();
     fetchSubtitlesFor(result.moved_paths);
   }

@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db, setSetting, getSetting, sortTitle, transaction } from '../db.js';
 import { UPLOADS_DIR } from '../paths.js';
-import { scanLibraries, addLibrary } from '../scanner/scan.js';
+import { scanLibraries, addLibrary, scanStatus } from '../scanner/scan.js';
 import * as q from '../queries.js';
 import {
   startEnrich, enrichStatus, enrichShow, enrichMovie, listOrderings,
@@ -114,9 +114,11 @@ router.delete('/libraries/:id', (req, res) => {
   res.json(result);
 });
 
-router.post('/scan', (req, res) => {
+router.get('/scan/status', (_req, res) => res.json(scanStatus()));
+
+router.post('/scan', async (req, res) => {
   try {
-    res.json(scanLibraries({ libraryId: req.body?.libraryId ?? null }));
+    res.json(await scanLibraries({ libraryId: req.body?.libraryId ?? null }));
     // New or changed files: read their real stream details in the background.
     startProbe();
   } catch (err) {

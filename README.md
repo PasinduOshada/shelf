@@ -136,6 +136,10 @@ off, so an outage never poisons the library, and every outbound call has a deadl
 half-open connection cannot hang the app. There is a test that runs the whole thing with
 every network call failing: `server/test/offline.test.mjs`.
 
+**It stays responsive.** The server lives inside the desktop app's own process, so a scan
+that never pauses would freeze the window. Scanning commits in batches and gives the event
+loop a turn between them: the app answers throughout, and Settings shows how far it has got.
+
 **It stays small.** Your videos are never copied or moved except by the organizer, when you
 approve it. What Shelf keeps is the index, plus artwork cached at the size it is shown —
 posters at 342px, backdrops at 780px, nothing larger. A library of 18 titles and 85 files

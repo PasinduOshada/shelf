@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [key, setKey] = useState('');
   const [picking, setPicking] = useState(null);
   const [busy, setBusy] = useState('');
+  const [scanning, setScanning] = useState(null);
   const [message, setMessage] = useState(null);
   const [excludeText, setExcludeText] = useState('');
 
@@ -72,6 +73,8 @@ export default function SettingsPage() {
     } catch (err) {
       setMessage({ text: err.message, error: true });
     } finally {
+      clearInterval(ticking);
+      setScanning(null);
       setBusy('');
     }
   }
@@ -169,7 +172,11 @@ export default function SettingsPage() {
           <SectionTitle
             action={
               <button onClick={runScan} disabled={busy === 'scan'} className={primaryBtn}>
-                {busy === 'scan' ? 'Scanning' : 'Scan now'}
+                {busy === 'scan'
+                  ? scanning?.total
+                    ? `Scanning ${scanning.done}/${scanning.total}`
+                    : 'Scanning'
+                  : 'Scan now'}
               </button>
             }
           >

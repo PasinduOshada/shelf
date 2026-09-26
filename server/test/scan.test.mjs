@@ -67,7 +67,7 @@ before(async () => {
   scanner = await import('../src/scanner/scan.js');
   scanner.addLibrary({ path: tv, kind: 'tv' });
   scanner.addLibrary({ path: films, kind: 'movie' });
-  stats = scanner.scanLibraries();
+  stats = await scanner.scanLibraries();
 });
 after(() => {
   db.db.close();
@@ -171,7 +171,7 @@ test('a category folder is a shelf, not a title', async () => {
   const freshDb = await import(`../src/db.js?group=${Date.now()}`);
   const freshScanner = await import(`../src/scanner/scan.js?group=${Date.now()}`);
   freshScanner.addLibrary({ path: tv, kind: 'tv' });
-  freshScanner.scanLibraries();
+  await freshScanner.scanLibraries();
 
   const shows = freshDb.db.prepare('SELECT title FROM shows ORDER BY title').all().map((r) => r.title);
   const films = freshDb.db.prepare('SELECT title FROM movies ORDER BY title').all().map((r) => r.title);
@@ -194,13 +194,13 @@ test('a category folder is a shelf, not a title', async () => {
   rmSync(work, { recursive: true, force: true });
 });
 
-test('an unplugged drive does not wipe what Shelf knows', () => {
+test('an unplugged drive does not wipe what Shelf knows', async () => {
   // A library on a removable drive. Scanning while it is unplugged used to
   // mark every one of its files missing, which reads as "your library is gone".
   const drive = join(work, 'E drive');
   file(join(drive, 'Severance', 'Severance.S01E01.1080p.mkv'));
   scanner.addLibrary({ path: drive, kind: 'tv' });
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
 
   const onDrive = () =>
     db.db.prepare('SELECT COUNT(*) c FROM files WHERE is_missing = 0 AND path LIKE ?').get(drive + '%').c;
@@ -210,7 +210,7 @@ test('an unplugged drive does not wipe what Shelf knows', () => {
 
   // Unplugged.
   rmSync(drive, { recursive: true, force: true });
-  const stats = scanner.scanLibraries();
+  const stats = await scanner.scanLibraries();
 
   assert.ok(stats.unavailable.includes(drive), 'the scan should report the folder it could not reach');
   assert.equal(onDrive(), 1, 'its files were marked missing even though the drive was just absent');
@@ -218,4 +218,34 @@ test('an unplugged drive does not wipe what Shelf knows', () => {
     db.db.prepare('SELECT id FROM shows WHERE id = ?').get(show.id),
     'the show should survive its drive being unplugged'
   );
+});
+
+test('a scan lets the app breathe, and says where it has got to', async () => {
+  // The server runs inside the desktop app's own process: a scan that never
+  // yields freezes the window. This checks the event loop keeps turning, and
+  // that progress is readable while it does.
+  const many = join(work, 'Many');
+  for (let n = 1; n <= 12; n++) {
+    file(join(many, `Show ${n}`, 'Season 01', `Show.${n}.S01E01.1080p.mkv`));
+  }
+  scanner.addLibrary({ path: many, kind: 'tv' });
+
+  let ticks = 0;
+  const seen = [];
+  const beat = setInterval(() => {
+    ticks++;
+    const s = scanner.scanStatus();
+    if (s.running) seen.push(s.done);
+  }, 5);
+
+  const before = scanner.scanStatus();
+  assert.equal(before.running, false, 'nothing should be running yet');
+
+  await scanner.scanLibraries();
+  clearInterval(beat);
+
+  assert.ok(ticks > 3, `the event loop only turned ${ticks} times during the scan`);
+  assert.ok(seen.length > 0, 'progress was never visible while scanning');
+  assert.ok(seen.at(-1) >= seen[0], 'progress should move forward');
+  assert.equal(scanner.scanStatus().running, false, 'it should say it has finished');
 });

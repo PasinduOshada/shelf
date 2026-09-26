@@ -19,7 +19,7 @@ if (!tvRoot && !movieRoot) {
 if (tvRoot) addLibrary({ path: tvRoot, kind: 'tv', label: 'TV Series' });
 if (movieRoot) addLibrary({ path: movieRoot, kind: 'movie', label: 'Movies' });
 
-const stats = scanLibraries();
+const stats = await scanLibraries();
 console.log('SCAN STATS:', JSON.stringify(stats));
 
 const q = (sql) => db.prepare(sql).get();

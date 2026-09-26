@@ -68,12 +68,12 @@ test('a series is followed with its own row and nothing on disk', async () => {
   assert.equal(row.folder_path, null, 'a tracked show has no folder');
 });
 
-test('downloading it later claims the row instead of starting a second one', () => {
+test('downloading it later claims the row instead of starting a second one', async () => {
   const before = db.db.prepare("SELECT id FROM shows WHERE sort_title = 'chernobyl'").all();
   assert.equal(before.length, 1);
 
   episodeFile(join(tv, 'Chernobyl', 'Season 01', 'Chernobyl.S01E01.1080p.mkv'));
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
 
   const after = db.db.prepare("SELECT id, folder_path FROM shows WHERE sort_title = 'chernobyl'").all();
   assert.equal(after.length, 1, 'a duplicate row appeared');
@@ -81,14 +81,14 @@ test('downloading it later claims the row instead of starting a second one', () 
   assert.ok(after[0].folder_path, 'the row never got its folder');
 });
 
-test('deleting the files keeps the title and its history', () => {
+test('deleting the files keeps the title and its history', async () => {
   const show = db.db.prepare("SELECT id FROM shows WHERE sort_title = 'chernobyl'").get();
   const episode = db.db.prepare('SELECT id FROM episodes WHERE show_id = ? ORDER BY episode_number').get(show.id);
   watch.setEpisodeWatched(episode.id, true);
   assert.equal(q.getShow(show.id).stats.watched, 1);
 
   rmSync(join(tv, 'Chernobyl'), { recursive: true, force: true });
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
 
   const still = q.getShow(show.id);
   assert.ok(still, 'the show disappeared with its files');
@@ -101,7 +101,7 @@ test('deleting the files keeps the title and its history', () => {
   );
 });
 
-test('a title with nothing on disk is not reported as missing', () => {
+test('a title with nothing on disk is not reported as missing', async () => {
   assert.equal(q.missingReport().length, 0);
 });
 
@@ -111,7 +111,7 @@ test('a followed title can be dropped again, but not one with files', async () =
   assert.equal(q.getMovie(film.id), null);
 
   episodeFile(join(tv, 'The Bear', 'The.Bear.S01E01.1080p.mkv'));
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
   const owned = db.db.prepare("SELECT id FROM shows WHERE sort_title = 'bear'").get();
   assert.throws(() => tracked.removeTracked('show', owned.id), /files in your library/);
 });
@@ -163,12 +163,12 @@ test('a title whose files you deleted can still be let go', async () => {
   // The button appeared but the action refused, because rows pointing at files
   // that are no longer there still counted as "files in your library".
   episodeFile(join(tv, 'Gone Show', 'Gone.Show.S01E01.1080p.mkv'));
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
   const show = db.db.prepare("SELECT id FROM shows WHERE sort_title LIKE 'gone%'").get();
   assert.ok(show, 'the show should have been scanned');
 
   rmSync(join(tv, 'Gone Show'), { recursive: true, force: true });
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
 
   const full = q.getShow(show.id);
   assert.equal(full.stats.owned, 0, 'nothing should be on disk any more');
@@ -209,7 +209,7 @@ test('catching up marks everything to that point and nothing after', async () =>
 
 test('a series you dropped stops asking to be watched', async () => {
   episodeFile(join(tv, 'Dropped Show', 'Dropped.Show.S01E01.1080p.mkv'));
-  scanner.scanLibraries();
+  await scanner.scanLibraries();
   const show = db.db.prepare("SELECT id FROM shows WHERE sort_title LIKE 'dropped%'").get();
 
   assert.ok(q.continueWatching(50).some((r) => r.show_id === show.id), 'it should be queued at first');
