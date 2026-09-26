@@ -8,14 +8,19 @@ import { duplicateGroups } from '../duplicates.js';
 
 const router = Router();
 
+// A count from a query string. A negative LIMIT means "no limit" to SQLite, so
+// an unchecked one quietly returns the whole table.
+const count = (value, fallback, max) =>
+  Math.min(Math.max(Math.floor(Number(value)) || fallback, 1), max);
+
 // ---------------------------------------------------------------- discovery
 
 router.get('/continue-watching', (req, res) => {
-  res.json(q.continueWatching(Number(req.query.limit) || 24));
+  res.json(q.continueWatching(count(req.query.limit, 24, 500)));
 });
 
 router.get('/upcoming', (req, res) => {
-  res.json(q.upcoming(Number(req.query.days) || 90));
+  res.json(q.upcoming(count(req.query.days, 90, 3650)));
 });
 
 router.get('/genres', (_req, res) => {
@@ -122,13 +127,13 @@ router.get('/history', (req, res) => {
     LEFT JOIN movies m ON m.id = h.movie_id
     LEFT JOIN episodes e ON e.id = h.episode_id
     ORDER BY h.watched_at DESC LIMIT ?
-  `).all(Number(req.query.limit) || 100));
+  `).all(count(req.query.limit, 100, 2000)));
 });
 
 // ---------------------------------------------------------------- stats
 
 router.get('/stats/overview', (_req, res) => res.json(stats.overview()));
-router.get('/stats/activity', (req, res) => res.json(stats.activity(Number(req.query.days) || 90)));
+router.get('/stats/activity', (req, res) => res.json(stats.activity(count(req.query.days, 90, 3650))));
 router.get('/stats/summaries', (_req, res) => res.json(stats.summaries()));
 router.get('/stats/streaks', (_req, res) => res.json(stats.streaks()));
 router.get('/stats/composition', (_req, res) => res.json(stats.composition()));

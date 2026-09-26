@@ -54,6 +54,10 @@ export function overview() {
 
 /** Per-day watch minutes over a window, for the activity chart. */
 export function activity(days = 90) {
+  // The window arrives from a URL, and one entry is built per day: keep it to
+  // a span someone could actually mean rather than allocating a row per day
+  // for the next few million years.
+  days = Math.min(Math.max(Math.floor(Number(days)) || 90, 1), 3650);
   const rows = db.prepare(`
     SELECT date(watched_at, 'localtime') AS day,
            COUNT(*) AS items,

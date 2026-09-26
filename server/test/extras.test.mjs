@@ -370,3 +370,13 @@ test('a late night counts as that night, not the day before', async () => {
 
   db2.exec("DELETE FROM watch_history WHERE id = 'tz-late'");
 });
+
+test('an absurd chart window is trimmed instead of eating all the memory', async () => {
+  // The window comes in on a URL and the chart holds one entry per day, so
+  // ?days=99999999 used to ask for a hundred million of them and kill the
+  // process the whole app runs in.
+  const stats = await import('../src/stats.js');
+  assert.equal(stats.activity(99_999_999).length, 3650);
+  assert.equal(stats.activity(-5).length, 1, 'a negative window comes back as the smallest one');
+  assert.equal(stats.activity('7').length, 7, 'a number in a string still works');
+});

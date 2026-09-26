@@ -107,6 +107,18 @@ export function createApp() {
     if (err?.code === 'LIMIT_FILE_COUNT' || err?.code === 'LIMIT_UNEXPECTED_FILE') {
       return res.status(413).json({ error: 'Too many files at once (5 at most)' });
     }
+    // A body that is not JSON, or one that is too big, is the caller's mistake,
+    // not a fault here: say so plainly instead of answering 500 and printing a
+    // stack trace for something nobody needs to debug.
+    if (err?.type === 'entity.parse.failed') {
+      return res.status(400).json({ error: 'That request body is not valid JSON' });
+    }
+    if (err?.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'That request is too large' });
+    }
+    if (err?.status >= 400 && err?.status < 500) {
+      return res.status(err.status).json({ error: String(err.message || 'Bad request') });
+    }
     console.error(err);
     res.status(500).json({ error: String(err?.message || err) });
   });

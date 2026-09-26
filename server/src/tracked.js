@@ -37,8 +37,11 @@ export async function addTracked({ kind, tmdbId = null, title = '', year = null 
   if (kind !== 'show' && kind !== 'movie') throw fail("kind must be 'show' or 'movie'");
   const id = tmdbId ? Number(tmdbId) : null;
   const name = String(title || '').trim();
-  const when = year ? Number(year) : null;
+  const when = year && Number.isFinite(Number(year)) ? Math.trunc(Number(year)) : null;
   if (!id && !name) throw fail('Give a title to follow, or pick one from the search');
+  // Longer than any real title, and long enough that a stray paste is obvious.
+  if (name.length > 300) throw fail('That title is too long');
+  if (when != null && (when < 1870 || when > 2200)) throw fail('That year is not a year');
   if (id && !hasApiKey()) throw fail('Add a TMDB API key in Settings first.');
 
   const existing = findExisting(kind, id, name, when);
