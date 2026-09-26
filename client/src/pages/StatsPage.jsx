@@ -61,6 +61,7 @@ function ActivityChart({ data }) {
 }
 
 function BarList({ items, valueKey = 'count', labelKey = 'name', format = (v) => v }) {
+  if (!items.length) return <p className="text-[12.5px] text-ink-dim">Nothing to show yet.</p>;
   const max = Math.max(1, ...items.map((i) => i[valueKey]));
   return (
     <div className="grid gap-2">
@@ -310,31 +311,36 @@ export default function StatsPage() {
         </div>
       )}
 
-      <h2 className="display mb-4 mt-11 text-sm uppercase tracking-[0.14em] text-ink-dim">
-        What’s on the shelf
-      </h2>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {composition.genres.length > 0 ? (
-          <Panel title="Genres">
-            <BarList items={composition.genres.slice(0, 8)} />
-          </Panel>
-        ) : (
-          <Panel title="Genres">
-            <p className="text-[12.5px] text-ink-dim">
-              Genres arrive with TMDB metadata. Add a key in Settings to fill this in.
-            </p>
-          </Panel>
-        )}
-        <Panel title="Quality mix">
-          <BarList items={composition.quality} />
-        </Panel>
-        <Panel title="Biggest shows">
-          <BarList items={composition.biggestShows} valueKey="bytes" labelKey="title" format={formatBytes} />
-        </Panel>
-        <Panel title="Biggest films">
-          <BarList items={composition.biggestMovies} valueKey="bytes" labelKey="title" format={formatBytes} />
-        </Panel>
-      </div>
+      {/* An empty shelf is four empty boxes; say nothing until there is something. */}
+      {overview.totals.files > 0 && (
+        <>
+          <h2 className="display mb-4 mt-11 text-sm uppercase tracking-[0.14em] text-ink-dim">
+            What’s on the shelf
+          </h2>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {composition.genres.length > 0 ? (
+              <Panel title="Genres">
+                <BarList items={composition.genres.slice(0, 8)} />
+              </Panel>
+            ) : (
+              <Panel title="Genres">
+                <p className="text-[12.5px] text-ink-dim">
+                  Genres arrive with TMDB metadata. Add a key in Settings to fill this in.
+                </p>
+              </Panel>
+            )}
+            <Panel title="Quality mix">
+              <BarList items={composition.quality} />
+            </Panel>
+            <Panel title="Biggest shows">
+              <BarList items={composition.biggestShows} valueKey="bytes" labelKey="title" format={formatBytes} />
+            </Panel>
+            <Panel title="Biggest films">
+              <BarList items={composition.biggestMovies} valueKey="bytes" labelKey="title" format={formatBytes} />
+            </Panel>
+          </div>
+        </>
+      )}
     </div>
   );
 }
