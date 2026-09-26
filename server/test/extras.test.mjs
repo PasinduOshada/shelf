@@ -310,3 +310,37 @@ test('browsing by genre puts series and films on the same shelf', async () => {
     'shelves should come biggest first'
   );
 });
+
+test('search finds a series by an episode name', async () => {
+  const q = await import('../src/queries.js');
+  const db2 = (await import('../src/db.js')).db;
+
+  db2.prepare(
+    `INSERT INTO shows (id, title, sort_title, tmdb_status) VALUES ('srch-show', 'The Last of Us', 'last of us', 'matched')`
+  ).run();
+  db2.prepare(
+    `INSERT INTO episodes (id, show_id, season_number, episode_number, title)
+     VALUES ('srch-ep', 'srch-show', 1, 3, 'Long, Long Time')`
+  ).run();
+  db2.prepare(
+    `INSERT INTO movies (id, title, sort_title, tmdb_title, tmdb_status)
+     VALUES ('srch-film', 'Arrival', 'arrival', 'Arrival', 'matched')`
+  ).run();
+
+  // By the name of the series, as before.
+  assert.ok(q.listShows({ search: 'last of us' }).some((s) => s.id === 'srch-show'));
+
+  // And by the name of an episode inside it, which is what people remember.
+  const byEpisode = q.listShows({ search: 'long, long time' });
+  const hit = byEpisode.find((s) => s.id === 'srch-show');
+  assert.ok(hit, 'the series should be found by its episode name');
+  assert.deepEqual(hit.search_hit, { season: 1, episode: 3, title: 'Long, Long Time' });
+
+  // A match on the series name itself is not reported as an episode match.
+  assert.equal(q.listShows({ search: 'last of us' }).find((s) => s.id === 'srch-show').search_hit, undefined);
+  assert.equal(q.listShows({ search: 'nothing like this' }).length, 0);
+
+  db2.prepare("DELETE FROM episodes WHERE id = 'srch-ep'").run();
+  db2.prepare("DELETE FROM shows WHERE id = 'srch-show'").run();
+  db2.prepare("DELETE FROM movies WHERE id = 'srch-film'").run();
+});

@@ -72,7 +72,26 @@ export function listShows({ search = '', status = null, sort = 'title' } = {}) {
 
   if (search) {
     const q = search.toLowerCase();
-    out = out.filter((s) => s.title.toLowerCase().includes(q));
+    // Episode names count too: people remember "Long, Long Time" without
+    // remembering which series it belongs to.
+    const hits = new Map();
+    for (const row of db.prepare(`
+      SELECT show_id, season_number, episode_number, title
+      FROM episodes
+      WHERE title IS NOT NULL AND LOWER(title) LIKE '%' || ? || '%'
+      ORDER BY season_number, episode_number
+    `).all(q)) {
+      if (!hits.has(row.show_id)) hits.set(row.show_id, row);
+    }
+    out = out.filter((s) => s.title.toLowerCase().includes(q) || hits.has(s.id));
+    for (const show of out) {
+      const hit = hits.get(show.id);
+      if (hit && !show.title.toLowerCase().includes(q)) {
+        show.search_hit = {
+          season: hit.season_number, episode: hit.episode_number, title: hit.title,
+        };
+      }
+    }
   }
   if (status) out = out.filter((s) => s.user_status === status);
 
@@ -210,7 +229,12 @@ export function listMovies({ search = '', status = null, sort = 'title' } = {}) 
   let out = rows.map(decorateMovie);
   if (search) {
     const q = search.toLowerCase();
-    out = out.filter((m) => m.title.toLowerCase().includes(q));
+    // The name on the file and the name TMDB gives can differ; both should find it.
+    out = out.filter((m) =>
+      m.title.toLowerCase().includes(q) ||
+      String(m.tmdb_title || '').toLowerCase().includes(q) ||
+      String(m.file_title || '').toLowerCase().includes(q)
+    );
   }
   if (status) out = out.filter((m) => m.user_status === status);
 

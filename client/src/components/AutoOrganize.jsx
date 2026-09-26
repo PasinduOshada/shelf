@@ -120,13 +120,15 @@ export default function AutoOrganize({ form, pickFolder, onReview, onChanged, bu
       setNote(
         e.error
           ? null
-          : e.moved
-            ? `Organized ${e.moved} file${e.moved === 1 ? '' : 's'}.`
-            : e.waiting
-              ? `Nothing moved; ${e.waiting} waiting for review.`
-              : e.downloading
-                ? `${e.downloading} still downloading; checking again later.`
-                : 'Nothing new to organize.'
+          : e.skipped
+            ? `Waiting: ${e.unreachable?.join(', ') || 'a folder'} could not be reached. Is the drive connected?`
+            : e.moved
+              ? `Organized ${e.moved} file${e.moved === 1 ? '' : 's'}.`
+              : e.waiting
+                ? `Nothing moved; ${e.waiting} waiting for review.`
+                : e.downloading
+                  ? `${e.downloading} still downloading; checking again later.`
+                  : 'Nothing new to organize.'
       );
       if (e.error) setError(e.error);
       onChanged?.();

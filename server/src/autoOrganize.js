@@ -13,7 +13,8 @@ import { getSetting, setSetting } from './db.js';
 import { hasApiKey } from './tmdb.js';
 import { planImport, applyPlan, runJob, organizeBusy, normalizeOptions, sourceList } from './organizer.js';
 import { scanLibraries } from './scanner/scan.js';
-import { watch as watchFs } from 'node:fs';
+import { watch as watchFs, existsSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fetchSubtitlesFor } from './autoSubtitles.js';
 import { startProbe } from './mediainfo.js';
 
@@ -153,10 +154,29 @@ export async function runAutoOrganize({ manual = false } = {}) {
 
 async function pass(config, report, manual) {
   const at = new Date().toISOString();
+
+  // A watched folder on a drive that is not plugged in is not a failure, it is
+  // a folder to look at later. Treating it as an error meant a log entry and a
+  // desktop notification every few minutes until the drive came back.
+  const folders = config.folders.filter((f) => existsSync(f));
+  // A destination Shelf has not created yet is fine; one whose parent is also
+  // missing means the drive itself is not there.
+  const reachableDest = (d) => existsSync(d) || existsSync(dirname(d));
+  const destinations = [
+    config.options.include.tv ? config.tvRoot : null,
+    config.options.include.movies ? config.movieRoot : null,
+  ].filter(Boolean);
+  const unreachable = [
+    ...config.folders.filter((f) => !existsSync(f)),
+    ...destinations.filter((d) => !reachableDest(d)),
+  ];
+  if (!folders.length || unreachable.length) {
+    return { at, manual, moved: 0, waiting: 0, unreachable, skipped: true };
+  }
   const onProgress = (p) => report(p.phase ? { ...p, phase: `Watched folders: ${p.phase.toLowerCase()}` } : p);
   const tmdbAvailable = config.options.useTmdb && hasApiKey();
   const plan = await planImport({
-    sources: config.folders,
+    sources: folders,
     tvRoot: config.tvRoot,
     movieRoot: config.movieRoot,
     options: config.options,

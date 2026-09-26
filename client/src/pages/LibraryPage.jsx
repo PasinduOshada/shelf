@@ -133,10 +133,12 @@ function ShowCard({ show }) {
       <div className="mt-2 truncate text-[12.5px] font-medium text-ink transition-colors group-hover:text-accent">
         {show.title}
       </div>
-      <div className="mono truncate text-[10px] text-ink-dim">
-        {show.owned_episodes > 0
-          ? `${plural(show.owned_episodes, 'ep')} · ${formatBytes(show.size_bytes)}`
-          : 'Tracking'}
+      <div className="mono truncate text-[10px] text-ink-dim" title={show.search_hit?.title || ''}>
+        {show.search_hit
+          ? `${episodeLabel(show.search_hit.season, show.search_hit.episode)} · ${show.search_hit.title}`
+          : show.owned_episodes > 0
+            ? `${plural(show.owned_episodes, 'ep')} · ${formatBytes(show.size_bytes)}`
+            : 'Tracking'}
       </div>
     </Link>
   );

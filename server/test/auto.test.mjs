@@ -95,3 +95,38 @@ test('a pass moves finished, recognisable downloads and leaves the rest', async 
 
   auto.setAutoConfig({ enabled: false });
 });
+
+test('a watched folder that is not there is waited for, not reported as broken', async () => {
+  // An external drive that is unplugged used to throw on every pass: a log
+  // entry and a desktop notification every few minutes until it came back.
+  const watching = join(work, 'watch-unplugged');
+  const dest = join(work, 'dest-unplugged');
+  mkdirSync(watching, { recursive: true });
+  mkdirSync(join(dest, 'TV'), { recursive: true });
+  mkdirSync(join(dest, 'Films'), { recursive: true });
+
+  auto.setAutoConfig({
+    enabled: true,
+    folders: [watching],
+    tvRoot: join(dest, 'TV'),
+    movieRoot: join(dest, 'Films'),
+    options: { useTmdb: false },
+    settleMinutes: 1,
+  });
+
+  // The drive goes away.
+  rmSync(watching, { recursive: true, force: true });
+
+  const before = auto.autoStatus().log.length;
+  const entry = await auto.runAutoOrganize({ manual: true });
+
+  assert.ok(entry, 'a manual run should report something');
+  assert.equal(entry.error, undefined, `it should not be an error: ${entry.error}`);
+  assert.equal(entry.skipped, true, 'it should say it skipped the pass');
+  assert.ok(entry.unreachable.includes(watching), 'it should name the folder it could not reach');
+  assert.equal(entry.moved, 0);
+  assert.equal(auto.autoStatus().log.length, before, 'nothing should be written to the log');
+
+  // Leave nothing watching a folder that is gone, or the timer outlives the run.
+  auto.setAutoConfig({ enabled: false, folders: [] });
+});
