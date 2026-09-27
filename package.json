@@ -1,7 +1,7 @@
 {
   "name": "shelf-desktop",
   "productName": "Shelf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local-first tracker for the TV and movie library you already have on disk",
   "author": "Pasindu Oshada",
   "homepage": "https://github.com/PasinduOshada/shelf",
@@ -84,7 +84,11 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico"
+      "uninstallerIcon": "build/icon.ico",
+      "artifactName": "Shelf-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Shelf-${version}.${ext}"
     },
     "linux": {
       "target": [

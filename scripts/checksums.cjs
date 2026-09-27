@@ -18,13 +18,15 @@ function sha256(file) {
   return createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 
+// Only this version's files: earlier builds stay in dist-desktop, and their
+// sums would otherwise be published beside the new ones.
 const artifacts = fs
   .readdirSync(OUT_DIR)
-  .filter((name) => name.endsWith('.exe'))
+  .filter((name) => name.endsWith(`-${version}.exe`))
   .sort();
 
 if (!artifacts.length) {
-  console.error('No .exe in dist-desktop. Run npm run dist first.');
+  console.error(`No ${version} .exe in dist-desktop. Run npm run dist first.`);
   process.exit(1);
 }
 
@@ -36,7 +38,7 @@ fs.writeFileSync(sumsFile, sums.map((s) => `${s.hash}  ${s.name}\n`).join(''));
 
 const notes = `## Shelf ${version}
 
-Windows, 64-bit. Install with **Shelf Setup ${version}.exe**, or run **Shelf ${version}.exe**
+Windows, 64-bit. Install with **Shelf-Setup-${version}.exe**, or run **Shelf-${version}.exe**
 without installing anything.
 
 ### Windows will warn you
@@ -49,7 +51,7 @@ A signing certificate costs more per year than this project takes in donations, 
 every file is published with its SHA-256 below. You can check the one you downloaded:
 
 \`\`\`powershell
-Get-FileHash "Shelf Setup ${version}.exe" -Algorithm SHA256
+Get-FileHash "Shelf-Setup-${version}.exe" -Algorithm SHA256
 \`\`\`
 
 ${sums.map((s) => `- \`${s.hash}\`  ${s.name}`).join('\n')}
