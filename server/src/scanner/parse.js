@@ -91,15 +91,19 @@ function cleanTitle(raw) {
   let s = normalizeSeparators(stripTrailingTags(stripLeadingTags(raw)));
 
   const parts = s.split(' ');
+  const isYear = (token) => /^(19|20)\d{2}$/.test(token) && plausibleYear(Number(token));
   const kept = [];
-  for (const p of parts) {
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
     const bare = bareToken(p);
     // Lone separators ("-") carry no meaning but must not terminate the title:
     // "Mission.Impossible.-.The.Final.Reckoning" is one title.
     if (!bare) continue;
     if (isNoiseToken(bare)) break;
-    // A year token ends the title -- bare form so "(2023)" counts too.
-    if (/^(19|20)\d{2}$/.test(bare) && kept.length) break;
+    // A year token ends the title -- bare form so "(2023)" counts too -- unless
+    // another year follows it, in which case this one is part of the name:
+    // "Blade Runner 2049 (2017)".
+    if (isYear(bare) && kept.length && !parts.slice(i + 1).some((q) => isYear(bareToken(q)))) break;
     kept.push(p);
   }
 
@@ -113,10 +117,19 @@ function cleanTitle(raw) {
   return title;
 }
 
+/**
+ * Could this be when something was released? Nothing is dated more than a
+ * year or so ahead, so "2049" in "Blade Runner 2049" is a title, not a year.
+ */
+function plausibleYear(n) {
+  return n >= 1888 && n <= new Date().getFullYear() + 2;
+}
+
 function extractYear(s, { first = false } = {}) {
   const paren = s.match(/[\[(]((?:19|20)\d{2})/);
-  if (paren) return Number(paren[1]);
-  const m = [...s.matchAll(/(?:^|[\s._([-])((?:19|20)\d{2})(?=$|[\s._)\]-])/g)];
+  if (paren && plausibleYear(Number(paren[1]))) return Number(paren[1]);
+  const m = [...s.matchAll(/(?:^|[\s._([-])((?:19|20)\d{2})(?=$|[\s._)\]-])/g)]
+    .filter((hit) => plausibleYear(Number(hit[1])));
   if (!m.length) return null;
   return Number(first ? m[0][1] : m[m.length - 1][1]);
 }
@@ -162,6 +175,15 @@ const EP_PATTERNS = [
   { re: /(?<![A-Za-z0-9])E(\d{1,3})(?!\d)/i, s: null, e: 1 },
   // Leading "02 - Title"
   { re: /^(\d{1,2})\s*[-–]\s+/, s: null, e: 1 },
+  // Anime numbering: "[Group] Frieren - 01 (1080p)", "One Piece - 1100 [x265]".
+  // Only in a name with no year: "Rocky II - 1979" is a film, and a film
+  // nearly always states its year where a release like this never does.
+  {
+    re: /\s[-–]\s+(?!(?:19|20)\d{2}(?!\d))(\d{1,4})(?:v\d)?(?=\s*(?:[[(]|$|[-–]\s))/,
+    s: null,
+    e: 1,
+    noYear: true,
+  },
 ];
 
 /**
@@ -194,6 +216,7 @@ export function parseFilename(filename, opts = {}) {
   const cleaned = stripLeadingTags(base);
 
   for (const pat of EP_PATTERNS) {
+    if (pat.noYear && result.year) continue;
     const m = cleaned.match(pat.re);
     if (!m) continue;
 
@@ -269,8 +292,13 @@ const clipWord = (word) =>
   new RegExp(`^(?:${word})(?:[\s._-]|$)|(?:^|[\s._-])(?:${word})$`, 'i');
 const SAMPLE = clipWord('sample');
 const TRAILER = clipWord('trailer|teaser');
-/** A folder releases put their sample clip in. */
-export const SAMPLE_DIR = /^samples?$/i;
+/**
+ * A folder of material that came with a release rather than being one: its
+ * sample, or the bonus folders Plex and Jellyfin both read as extras.
+ * "Shorts" and "Other" are left out; a folder of short films is a real thing.
+ */
+export const SAMPLE_DIR =
+  /^(?:samples?|extras|featurettes|trailers|interviews|bonus(?:[\s._-]?features)?|(?:behind|deleted)[\s._-]?(?:the[\s._-]?)?scenes)$/i;
 // A "sample" that is feature-length is just a film with an odd name.
 const SAMPLE_MAX_BYTES = 300 * 1024 ** 2;
 

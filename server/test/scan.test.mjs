@@ -205,6 +205,52 @@ test('a category folder is a shelf, not a title', async () => {
   rmSync(work, { recursive: true, force: true });
 });
 
+test('a download left loose in a TV folder joins the series it belongs to', async () => {
+  // Found on a real Downloads folder: "Lanterns.S01E06.mkv" sat directly in a
+  // TV library, never scanned, while Up Next called it "not downloaded yet".
+  const work = mkdtempSync(join(tmpdir(), 'shelf-loose-'));
+  process.env.SHELF_DATA_DIR = join(work, 'data');
+  process.env.SHELF_DB_PATH = join(work, 'data', 'test.db');
+  mkdirSync(process.env.SHELF_DATA_DIR);
+
+  const shows = join(work, 'Shows');
+  const downloads = join(work, 'Downloads');
+  file(join(shows, 'Lanterns', 'Season 01', 'Lanterns.S01E05.1080p.mkv'));
+  file(join(downloads, 'Lanterns.S01E06.720p.WEBRip.x265.mkv'));
+  file(join(downloads, 'Frieren', '[SubsPlease] Sousou no Frieren - 01 (1080p).mkv'));
+  file(join(downloads, 'Frieren - 02.mkv'));
+  // A film filed among the series, and the bonus folder that came with one.
+  file(join(downloads, 'Free Solo (2018)', 'Free.Solo.2018.1080p.mkv'), BIG);
+  file(join(downloads, 'Extras', 'Behind the scenes.mkv'), BIG);
+
+  const freshDb = await import(`../src/db.js?loose=${Date.now()}`);
+  const freshScanner = await import(`../src/scanner/scan.js?loose=${Date.now()}`);
+  freshScanner.addLibrary({ path: shows, kind: 'tv' });
+  freshScanner.addLibrary({ path: downloads, kind: 'tv' });
+  await freshScanner.scanLibraries();
+
+  // Scoped to this test's folders: the database may be shared with others.
+  const mine = (sql) =>
+    freshDb.db.prepare(sql).all(work + '%');
+  const episodesOf = (title) => mine(
+    `SELECT e.episode_number n FROM files f JOIN shows s ON s.id = f.show_id
+     JOIN episodes e ON e.id = f.episode_id WHERE f.path LIKE ? AND s.title = '${title}'
+     ORDER BY n`
+  ).map((r) => r.n);
+
+  assert.deepEqual(episodesOf('Lanterns'), [5, 6], 'the loose episode should join Lanterns');
+  const lanterns = mine("SELECT DISTINCT f.show_id FROM files f JOIN shows s ON s.id = f.show_id WHERE f.path LIKE ? AND s.title = 'Lanterns'");
+  assert.equal(lanterns.length, 1, 'one Lanterns, not two');
+  assert.deepEqual(episodesOf('Frieren'), [1, 2], 'anime numbering should give episodes');
+
+  const films = mine('SELECT m.title FROM files f JOIN movies m ON m.id = f.movie_id WHERE f.path LIKE ?').map((r) => r.title);
+  assert.ok(films.includes('Free Solo'), `a dated film among series should be a film: ${films.join(', ')}`);
+  assert.ok(!films.includes('Behind the scenes'), 'bonus material is not a film');
+
+  freshDb.db.close();
+  rmSync(work, { recursive: true, force: true });
+});
+
 test('an unplugged drive does not wipe what Shelf knows', async () => {
   // A library on a removable drive. Scanning while it is unplugged used to
   // mark every one of its files missing, which reads as "your library is gone".

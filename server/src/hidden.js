@@ -16,7 +16,11 @@ function hiddenUnder(root) {
     const out = execFileSync(
       'cmd',
       ['/d', '/u', '/c', 'dir', '/a:h', '/b', '/s', resolve(root)],
-      { encoding: 'buffer', windowsHide: true, timeout: 120_000, maxBuffer: 64 * 1024 * 1024 }
+      {
+        encoding: 'buffer', windowsHide: true, timeout: 120_000, maxBuffer: 64 * 1024 * 1024,
+        // "File Not Found" on stderr is the ordinary answer, not an error worth printing.
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }
     );
     // /u makes cmd write UTF-16, so names with accents survive the round trip.
     for (const line of out.toString('utf16le').split(/\r?\n/)) {

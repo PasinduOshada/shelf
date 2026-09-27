@@ -295,7 +295,7 @@ function scanGroupFolder(library, dir, stats, excludes) {
     const parsed = parseFilename(filename);
     if (parsed.isEpisode && parsed.season != null && parsed.title) {
       const key = sortTitle(parsed.title);
-      if (!series.has(key)) series.set(key, { title: parsed.title, files: [] });
+      if (!series.has(key)) series.set(key, { title: parsed.title, year: parsed.year, files: [] });
       series.get(key).files.push({ path, filename, parsed });
       continue;
     }
@@ -313,9 +313,18 @@ function scanGroupFolder(library, dir, stats, excludes) {
   }
 
   for (const group of series.values()) {
+    // The next episode of a series you keep in its own folder, downloaded
+    // somewhere else, belongs to that series -- not to a second one of the
+    // same name. Otherwise it stays "not downloaded" while it sits on disk.
+    const known = db.prepare(
+      `SELECT * FROM shows
+       WHERE sort_title = ? AND folder_path IS NOT NULL AND folder_path != ?
+         AND (year IS NULL OR ?3 IS NULL OR year = ?3)
+       ORDER BY length(folder_path) LIMIT 1`
+    ).get(sortTitle(group.title), group.files[0].path, group.year ?? null);
     // No folder of its own to be known by, so the first of its files serves as
     // the show's identity. It is stable as long as that file is there.
-    const show = upsertShow({
+    const show = known || upsertShow({
       libraryId: library.id,
       folderPath: group.files[0].path,
       folderName: group.title,
@@ -371,6 +380,30 @@ async function scanTvLibrary(library, stats, excludes) {
     }
     if (!owned.length) continue;
 
+    // One dated video and nothing shaped like an episode: a film that lives
+    // among the series ("Documentaries/Free Solo (2018)"). As a show it would
+    // have no episodes to open or mark watched.
+    if (owned.length === 1 && manualEpisode.get(owned[0])?.manual_episode == null) {
+      const filename = basename(owned[0]);
+      const parsed = parseFilename(filename, { folderTitle: basename(showRoot) });
+      const folder = parseFolderName(basename(showRoot));
+      const year = parsed.year ?? folder.year;
+      if (!parsed.isEpisode && year && !seasonFromPath(owned[0], showRoot)) {
+        transaction(() => {
+          const movie = upsertMovie({
+            libraryId: library.id, collectionId: null, title: folder.title || parsed.title, year,
+          });
+          recordFile({
+            path: owned[0], filename, parentDir: dirname(owned[0]), ext: parsed.ext, movieId: movie.id,
+            quality: parsed.quality, codec: parsed.codec, source: parsed.source,
+          });
+        });
+        stats.movies++;
+        stats.files++;
+        continue;
+      }
+    }
+
     transaction(() => {
     const show = upsertShow({
       libraryId: library.id,
@@ -422,7 +455,10 @@ async function scanTvLibrary(library, stats, excludes) {
   }
 
   // After the shows, so anything a real series claimed is already spoken for.
-  for (const dir of found.groups) {
+  // The library folder itself goes last: a Downloads folder is mostly loose
+  // files, and those were never looked at.
+  progress.total++;
+  for (const dir of [...found.groups, library.path]) {
     progress.current = basename(dir);
     progress.done++;
     await breathe();

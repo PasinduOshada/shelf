@@ -46,6 +46,26 @@ test('unusual episode markers', () => {
   });
 });
 
+test('anime numbering is an episode, a year-free one only', () => {
+  // The name nearly every anime release uses. Parsed as a film called
+  // "Sousou no Frieren 01", a whole folder of these had no episodes at all.
+  check('[SubsPlease] Sousou no Frieren - 01 (1080p).mkv', {
+    isEpisode: true, title: 'Sousou no Frieren', season: 1, episode: 1,
+  });
+  check('[Erai-raws] One Piece - 1100 [1080p].mkv', { isEpisode: true, title: 'One Piece', episode: 1100 });
+  check('Attack on Titan - 25v2.mkv', { isEpisode: true, episode: 25 });
+  // With a year in it, " - 1979" is a film's year, not episode 1979.
+  check('Rocky II - 1979.mkv', { isEpisode: false, title: 'Rocky II', year: 1979 });
+});
+
+test('a number in a title is not its year', () => {
+  check('Blade Runner 2049 (2017).mkv', { isEpisode: false, title: 'Blade Runner 2049', year: 2017 });
+  check('Blade.Runner.2049.2017.1080p.mkv', { title: 'Blade Runner 2049', year: 2017 });
+  // Nothing is released in 2049 yet, so alone it is still part of the name.
+  check('Blade Runner 2049.mkv', { title: 'Blade Runner 2049', year: null });
+  check('2001.A.Space.Odyssey.1968.mkv', { title: '2001 A Space Odyssey', year: 1968 });
+});
+
 test('movies keep words that look like release noise', () => {
   check('The.Godfather.Part.II.1974.REMASTERED.720p.10bit.BluRay.mkv', {
     isEpisode: false, title: 'The Godfather Part II', year: 1974,
