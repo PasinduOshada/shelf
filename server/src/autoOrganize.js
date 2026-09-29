@@ -143,8 +143,14 @@ export async function runAutoOrganize({ manual = false } = {}) {
     return entry;
   } catch (err) {
     const entry = { at: new Date(started).toISOString(), manual, error: String(err?.message || err), moved: 0, waiting: 0 };
-    writeLog(entry);
-    autoEvents.emit('run', entry);
+    // A problem that lasts (a full drive) would otherwise be a log line and a
+    // desktop notification every fifteen minutes. Say it once; say it again
+    // only when it changes, or when someone asked for this run.
+    const repeat = !manual && readLog()[0]?.error === entry.error;
+    if (!repeat) {
+      writeLog(entry);
+      autoEvents.emit('run', entry);
+    }
     return entry;
   } finally {
     schedule.running = false;
