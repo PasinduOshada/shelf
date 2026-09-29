@@ -16,7 +16,7 @@
 //   - a "move" deletes the source only after a verified copy (cross-drive)
 //   - every operation is logged before it happens, so a batch can be undone
 import { readdirSync, existsSync, statSync, constants as fsConstants } from 'node:fs';
-import { rename, copyFile, stat, unlink, mkdir, readdir, rmdir } from 'node:fs/promises';
+import { rename, copyFile, stat, statfs, unlink, mkdir, readdir, rmdir } from 'node:fs/promises';
 import { join, dirname, basename, extname, isAbsolute, resolve, relative } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { db, transaction, getSetting } from './db.js';
@@ -888,7 +888,15 @@ export async function planImport({
 // ---------------------------------------------------------------- applying
 
 async function copyVerified(from, to) {
-  await copyFile(from, to, fsConstants.COPYFILE_EXCL);
+  try {
+    await copyFile(from, to, fsConstants.COPYFILE_EXCL);
+  } catch (err) {
+    // A copy that died part way (a full disk, a drive pulled out) leaves a
+    // truncated file that every later attempt would find "already there".
+    // EEXIST means the file was someone else's to begin with: never touch it.
+    if (err.code !== 'EEXIST') await unlink(to).catch(() => {});
+    throw err;
+  }
   const [a, b] = await Promise.all([stat(from), stat(to)]);
   if (a.size !== b.size) {
     await unlink(to).catch(() => {});
@@ -969,11 +977,62 @@ async function emptiedFolders(dirs, sources) {
   return out;
 }
 
+/** The folder itself, or the closest parent of it that exists yet. */
+function nearestExisting(dir) {
+  for (let d = dir; ; d = dirname(d)) {
+    if (existsSync(d)) return d;
+    if (dirname(d) === d) return null;
+  }
+}
+
+const gb = (bytes) =>
+  bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1024 ** 2))} MB`;
+
+/**
+ * Will the files fit where they are going? Moves within one drive are renames
+ * and need no room; copies, and moves to another drive, need all of it. Asked
+ * before anything is touched, so a full drive stops the batch with a reason
+ * rather than failing it one file at a time.
+ */
+async function spaceProblem(chosen, mode) {
+  const need = new Map();
+  for (const item of chosen) {
+    const dest = nearestExisting(dirname(item.to));
+    if (!dest) continue;
+    const [src, dst] = await Promise.all([stat(item.from).catch(() => null), stat(dest).catch(() => null)]);
+    if (!src || !dst) continue;
+    if (mode !== 'copy' && src.dev === dst.dev) continue;
+    const entry = need.get(dst.dev) || { dir: dest, bytes: 0 };
+    entry.bytes += src.size;
+    need.set(dst.dev, entry);
+  }
+  for (const { dir, bytes } of need.values()) {
+    let free;
+    try {
+      const s = await statfs(dir);
+      free = s.bavail * s.bsize;
+    } catch {
+      continue; // cannot tell; the copy itself will say if it runs out
+    }
+    // A little headroom: a drive filled to the last byte is its own problem.
+    if (bytes + 256 * 1024 ** 2 > free) {
+      const where = /^[a-z]:/i.test(dir) ? `${dir.slice(0, 2).toUpperCase()} drive` : dir;
+      return `Not enough space on the ${where}: this needs ${gb(bytes)} and ${gb(free)} is free. Nothing was moved.`;
+    }
+  }
+  return null;
+}
+
 export async function applyPlan(plan, ids, { onProgress = () => {} } = {}) {
   if (!Array.isArray(ids) || !ids.length) throw new Error('Choose at least one file');
   const wanted = new Set(ids);
   const chosen = plan.items.filter((i) => wanted.has(i.id) && i.status === 'ok');
   const { mode } = plan.options;
+  if (mode !== 'rename') {
+    onProgress({ phase: 'Checking space', done: 0, total: chosen.length });
+    const problem = await spaceProblem(chosen, mode);
+    if (problem) throw new Error(problem);
+  }
   const batchId = randomUUID();
   const totalBytes = chosen.reduce((s, i) => s + (i.size_bytes || 0), 0);
   let bytes = 0;
