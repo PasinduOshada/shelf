@@ -325,3 +325,40 @@ test('a new episode joins the folder the series already lives in', async () => {
 
   db.prepare("DELETE FROM shows WHERE id = 'split-show'").run();
 });
+
+test('tidying a library never moves a file out of the library it is in', async () => {
+  // A real setup: a "Downloads" TV library and a "TV Series" one. Tidy my
+  // library sent the first TV library alphabetically as the destination, so
+  // the preview moved every series on E: into D:\Downloads.
+  const db = (await import('../src/db.js')).db;
+  const base = join(work, 'Two Libraries');
+  const downloads = join(base, 'Downloads');
+  const series = join(base, 'TV Series');
+  const films = join(base, 'Movies');
+  touch(join(series, 'Severance', 'Season 1', 'Severance.S01E01.mkv'), 'a');
+  touch(join(downloads, 'Shogun.S01E02.mkv'), 'b');
+  touch(join(downloads, 'Heat.1995.1080p.mkv'), 'c');
+  mkdirSync(films, { recursive: true });
+  const libs = [['tidy-dl', downloads, 'tv'], ['tidy-tv', series, 'tv'], ['tidy-film', films, 'movie']];
+  for (const [id, path, kind] of libs) {
+    db.prepare('INSERT INTO libraries (id, path, kind) VALUES (?, ?, ?)').run(id, path, kind);
+  }
+
+  const plan = await o.planImport({
+    sources: [downloads, series, films],
+    tvRoot: downloads, // what the button sent: whichever TV library sorted first
+    movieRoot: films,
+    settleMs: 0,
+    options: { useTmdb: false, keepLibrary: true },
+  });
+
+  const to = (re) => plan.items.find((i) => re.test(i.from))?.to || '';
+  assert.ok(to(/Severance/).startsWith(join(series, 'Severance')),
+    `Severance should stay in TV Series, not go to ${to(/Severance/)}`);
+  assert.ok(to(/Shogun/).startsWith(downloads), 'an episode in Downloads stays in Downloads');
+  // A film in a TV library has no film library to be tidied into: it is
+  // renamed where it is, not carried to another drive.
+  assert.equal(dirname(to(/Heat/)), downloads);
+
+  db.prepare("DELETE FROM libraries WHERE id LIKE 'tidy-%'").run();
+});

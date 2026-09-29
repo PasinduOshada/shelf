@@ -41,6 +41,10 @@ export const DEFAULT_OPTIONS = {
   useTmdb: true,
   tv: { showYear: true, seasonPad: true, episodeTitle: true, quality: true },
   movie: { folder: true, year: true, quality: true },
+  // Tidying a library: nothing leaves the library it is already in, whatever
+  // the destination fields say. With two TV libraries there is no one right
+  // destination, and the first alphabetically was taking everything.
+  keepLibrary: false,
 };
 
 /** Merge user options over the defaults, keeping only known keys and types. */
@@ -761,36 +765,56 @@ export async function planImport({
     items.push(item);
   };
 
+  // With keepLibrary, the destination for each file is the library holding it;
+  // a file in no library of its kind is only renamed where it is.
+  const libraryRoots = (kind) => (opts.keepLibrary
+    ? db.prepare('SELECT path FROM libraries WHERE kind = ? AND enabled = 1').all(kind).map((l) => l.path)
+    : []);
+  const tvLibraries = libraryRoots('tv');
+  const movieLibraries = libraryRoots('movie');
+  const rootFor = (dir, fallback, libraries) => {
+    if (!opts.keepLibrary) return fallback;
+    return libraries.filter((l) => isInside(dir, l))
+      .sort((a, b) => b.length - a.length)[0] || null;
+  };
+
   for (const g of shows.values()) {
     // Show folders already in the destination are kept exactly as they are.
     // Renaming in place has no destination, so there is no folder to work out.
-    const showDir = inPlace
-      ? null
-      : (g.home && isInside(g.home, roots.tv) && g.home) ||
-        libraryShowDir(roots.tv, g) ||
-        existingTitleDir(roots.tv, g.title) ||
-        join(roots.tv, showFolderName(g, opts.tv));
+    const dirs = new Map();
+    const showDirIn = (root) => {
+      if (!dirs.has(root)) {
+        dirs.set(root,
+          (g.home && isInside(g.home, root) && g.home) ||
+          libraryShowDir(root, g) ||
+          existingTitleDir(root, g.title) ||
+          join(root, showFolderName(g, opts.tv)));
+      }
+      return dirs.get(root);
+    };
     for (const it of g.items) {
       Object.assign(it, { title: g.title, year: g.year, tmdb_id: g.tmdb_id || null, source: g.source });
       const official = g.names?.get(it.season)?.get(it.episode);
       if (official) it.episodeTitle = official;
+      const root = inPlace ? null : rootFor(it.video.dir, roots.tv, tvLibraries);
       place(
         it,
-        inPlace ? it.video.dir : seasonDir(showDir, it.season, opts.tv.seasonPad),
+        root ? seasonDir(showDirIn(root), it.season, opts.tv.seasonPad) : it.video.dir,
         episodeFileBase(it, opts.tv)
       );
     }
   }
 
   for (const m of movies) {
+    const root = inPlace ? null : rootFor(m.video.dir, roots.movie, movieLibraries);
     // A film already in a folder inside the destination (its own, or a
     // collection like "Avatar") stays there.
-    const kept = !inPlace && m.home && isInside(m.home, roots.movie) ? m.home : null;
-    const dir = inPlace
+    const kept = root && m.home && isInside(m.home, root) ? m.home : null;
+    const dir = !root
       ? m.video.dir
       : kept || (opts.movie.folder
-        ? existingTitleDir(roots.movie, m.title) || join(roots.movie, movieBase(m, opts.movie))
-        : roots.movie);
+        ? existingTitleDir(root, m.title) || join(root, movieBase(m, opts.movie))
+        : root);
     place(m, dir, movieFileBase(m, opts.movie));
   }
 

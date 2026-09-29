@@ -319,7 +319,9 @@ export default function OrganizePage() {
       sources: libs.map((l) => l.path),
       tvRoot: tv?.path,
       movieRoot: film?.path,
-      options: { ...opts, include: { tv: Boolean(tv), movies: Boolean(film) } },
+      // Each file stays in the library it is in: with a Downloads library and
+      // a TV Series library, "the" TV destination was whichever sorted first.
+      options: { ...opts, include: { tv: Boolean(tv), movies: Boolean(film) }, keepLibrary: true },
     });
   }
 
