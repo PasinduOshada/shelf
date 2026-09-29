@@ -423,6 +423,23 @@ test('marking a whole series watched is not hours spent today', async () => {
   db2.prepare("DELETE FROM shows WHERE id = 'backlog'").run();
 });
 
+test('unmarking twice does not erase an earlier viewing', async () => {
+  const watch = await import('../src/watch.js');
+  const db2 = (await import('../src/db.js')).db;
+  db2.prepare("INSERT INTO shows (id, title, sort_title) VALUES ('twice', 'Twice', 'twice')").run();
+  db2.prepare("INSERT INTO episodes (id, show_id, season_number, episode_number) VALUES ('twice-1', 'twice', 1, 1)").run();
+  const logged = () => db2.prepare("SELECT COUNT(*) c FROM watch_history WHERE episode_id = 'twice-1'").get().c;
+
+  watch.setEpisodeWatched('twice-1', true);
+  watch.setEpisodeWatched('twice-1', true); // a rewatch
+  watch.setEpisodeWatched('twice-1', false); // undo the rewatch
+  assert.equal(logged(), 1);
+  watch.setEpisodeWatched('twice-1', false); // a stale second click
+  assert.equal(logged(), 1, 'the first viewing should survive');
+
+  db2.prepare("DELETE FROM shows WHERE id = 'twice'").run();
+});
+
 test('an absurd chart window is trimmed instead of eating all the memory', async () => {
   // The window comes in on a URL and the chart holds one entry per day, so
   // ?days=99999999 used to ask for a hundred million of them and kill the

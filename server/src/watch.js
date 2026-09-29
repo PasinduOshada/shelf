@@ -54,6 +54,12 @@ export function setEpisodeWatched(episodeId, watched, { at = null, ifUnwatched =
       changed = false;
       return;
     }
+    // Unmarking what is already unmarked -- a double click, a second window
+    // showing old state -- would otherwise delete an earlier, real viewing.
+    if (!watched && !existing?.watched) {
+      changed = false;
+      return;
+    }
     if (existing) {
       db.prepare(
         `UPDATE episode_state SET watched = ?, watched_at = CASE WHEN ? THEN ? ELSE watched_at END,
@@ -92,6 +98,12 @@ export function setMovieWatched(movieId, watched, { at = null, ifUnwatched = fal
   transaction(() => {
     const existing = db.prepare('SELECT * FROM movie_state WHERE movie_id = ?').get(movie.id);
     if (ifUnwatched && existing?.watched && watched) {
+      changed = false;
+      return;
+    }
+    // Unmarking what is already unmarked -- a double click, a second window
+    // showing old state -- would otherwise delete an earlier, real viewing.
+    if (!watched && !existing?.watched) {
       changed = false;
       return;
     }
