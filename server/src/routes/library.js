@@ -81,19 +81,34 @@ router.post('/libraries', (req, res) => {
 router.delete('/libraries/:id', (req, res) => {
   const id = req.params.id;
   const result = transaction(() => {
+    const library = db.prepare('SELECT path FROM libraries WHERE id = ?').get(id);
+    if (!library) return { ok: true, files: 0, removed: 0, kept: 0 };
     const shows = db.prepare('SELECT id FROM shows WHERE library_id = ?').all(id).map((r) => r.id);
     const movies = db.prepare('SELECT id FROM movies WHERE library_id = ?').all(id).map((r) => r.id);
-    const files = db.prepare('SELECT COUNT(*) c FROM files WHERE show_id IN (SELECT id FROM shows WHERE library_id = ?) OR movie_id IN (SELECT id FROM movies WHERE library_id = ?)').get(id, id).c;
 
-    db.prepare('DELETE FROM files WHERE show_id IN (SELECT id FROM shows WHERE library_id = ?)').run(id);
-    db.prepare('DELETE FROM files WHERE movie_id IN (SELECT id FROM movies WHERE library_id = ?)').run(id);
+    // The files that go are the ones in this folder -- not the ones belonging
+    // to its titles. A loose episode in Downloads can belong to a series whose
+    // folder is in another library, and a library nested inside this one
+    // keeps its own files.
+    const norm = (p) => String(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    const root = norm(library.path);
+    const under = (p, dir) => norm(p).startsWith(dir + '/');
+    const nested = db.prepare('SELECT path FROM libraries WHERE id != ?').all(id)
+      .map((l) => norm(l.path)).filter((p) => p.startsWith(root + '/'));
+    const doomed = db.prepare('SELECT id, path FROM files').all()
+      .filter((f) => under(f.path, root) && !nested.some((n) => under(f.path, n)));
+    const dropFile = db.prepare('DELETE FROM files WHERE id = ?');
+    for (const f of doomed) dropFile.run(f.id);
+    const files = doomed.length;
 
     // Titles with nothing of yours attached go too; the rest stay as records.
+    // So does a series with episodes still on disk in another library.
     let removed = 0;
     for (const showId of shows) {
       const keep = db.prepare(`
         SELECT 1 FROM shows s WHERE s.id = ?
           AND (s.is_favorite = 1 OR s.user_status IS NOT NULL OR s.user_rating IS NOT NULL
+               OR EXISTS (SELECT 1 FROM files f WHERE f.show_id = s.id)
                OR (s.notes IS NOT NULL AND s.notes != '')
                OR EXISTS (SELECT 1 FROM watch_history h WHERE h.show_id = s.id)
                OR EXISTS (SELECT 1 FROM episode_state e WHERE e.show_id = s.id AND (e.watched = 1 OR e.rating IS NOT NULL)))
@@ -109,6 +124,7 @@ router.delete('/libraries/:id', (req, res) => {
       const keep = db.prepare(`
         SELECT 1 FROM movies m WHERE m.id = ?
           AND (m.is_favorite = 1 OR m.user_status IS NOT NULL OR m.user_rating IS NOT NULL
+               OR EXISTS (SELECT 1 FROM files f WHERE f.movie_id = m.id)
                OR (m.notes IS NOT NULL AND m.notes != '')
                OR EXISTS (SELECT 1 FROM watch_history h WHERE h.movie_id = m.id)
                OR EXISTS (SELECT 1 FROM movie_state s WHERE s.movie_id = m.id AND (s.watched = 1 OR s.rating IS NOT NULL)))
