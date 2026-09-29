@@ -66,7 +66,7 @@ async function call(path, { method = 'GET', body, auth = true } = {}) {
     'Content-Type': 'application/json',
     'trakt-api-version': '2',
     'trakt-api-key': c.clientId,
-    'User-Agent': 'Shelf/0.1.2',
+    'User-Agent': 'Shelf/0.1.3',
   };
   if (auth) headers.Authorization = `Bearer ${getSecret('trakt.accessToken')}`;
   let res;
