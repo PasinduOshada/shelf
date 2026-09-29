@@ -396,6 +396,33 @@ test('a poster nothing points at any more is not kept for ever', async () => {
   db2.prepare("DELETE FROM movies WHERE id = 'poster-owner'").run();
 });
 
+test('marking a whole series watched is not hours spent today', async () => {
+  // "I've seen all of it" was logged as every episode watched this minute:
+  // a long series put hundreds of hours into this week, today's streak and
+  // this year's Wrapped.
+  const stats = await import('../src/stats.js');
+  const watch = await import('../src/watch.js');
+  const db2 = (await import('../src/db.js')).db;
+  db2.exec('DELETE FROM watch_history');
+  db2.prepare("INSERT INTO shows (id, title, sort_title) VALUES ('backlog', 'The Wire', 'wire')").run();
+  for (let e = 1; e <= 10; e++) {
+    db2.prepare('INSERT INTO episodes (id, show_id, season_number, episode_number, runtime) VALUES (?, ?, 1, ?, 60)')
+      .run(`backlog-${e}`, 'backlog', e);
+  }
+
+  watch.setShowWatched('backlog', { watched: true });
+  assert.equal(stats.overview().watched.minutes, 600, 'it still counts towards everything watched');
+  assert.equal(stats.summaries().week.minutes, 0, 'but not as this week');
+  assert.equal(stats.activity(7).at(-1).minutes, 0, 'nor today');
+  assert.equal(stats.streaks().current, 0, 'nor a streak');
+
+  // Watching one episode now is viewing now.
+  watch.setEpisodeWatched('backlog-10', true);
+  assert.equal(stats.summaries().week.minutes, 60);
+
+  db2.prepare("DELETE FROM shows WHERE id = 'backlog'").run();
+});
+
 test('an absurd chart window is trimmed instead of eating all the memory', async () => {
   // The window comes in on a URL and the chart holds one entry per day, so
   // ?days=99999999 used to ask for a hundred million of them and kill the

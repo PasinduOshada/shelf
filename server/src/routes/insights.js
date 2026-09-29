@@ -122,7 +122,7 @@ router.get('/history', (req, res) => {
   res.json(db.prepare(`
     SELECT h.*, s.title AS show_title, COALESCE(m.tmdb_title, m.title) AS movie_title,
            e.season_number, e.episode_number, e.title AS episode_title
-    FROM watch_history h
+    FROM dated_history h
     LEFT JOIN shows s ON s.id = h.show_id
     LEFT JOIN movies m ON m.id = h.movie_id
     LEFT JOIN episodes e ON e.id = h.episode_id

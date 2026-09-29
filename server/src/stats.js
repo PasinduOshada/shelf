@@ -62,7 +62,7 @@ export function activity(days = 90) {
     SELECT date(watched_at, 'localtime') AS day,
            COUNT(*) AS items,
            COALESCE(SUM(minutes),0) AS minutes
-    FROM watch_history
+    FROM dated_history
     WHERE watched_at >= datetime('now', '-' || ? || ' days')
     GROUP BY day ORDER BY day
   `).all(days);
@@ -87,7 +87,7 @@ export function summaries() {
              -- SUM over no rows is NULL, and a quiet week has no rows.
              COALESCE(SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END), 0) movies,
              COALESCE(SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END), 0) episodes
-      FROM watch_history
+      FROM dated_history
       WHERE watched_at >= ${fromSql} ${toSql ? `AND watched_at < ${toSql}` : ''}
     `).get();
     return { ...r, hours: +(r.minutes / 60).toFixed(1) };
@@ -95,7 +95,7 @@ export function summaries() {
 
   const topIn = (fromSql) => db.prepare(`
     SELECT s.title, COUNT(*) n, COALESCE(SUM(h.minutes),0) minutes
-    FROM watch_history h JOIN shows s ON s.id = h.show_id
+    FROM dated_history h JOIN shows s ON s.id = h.show_id
     WHERE h.watched_at >= ${fromSql}
     GROUP BY s.id ORDER BY minutes DESC LIMIT 5
   `).all();
@@ -112,7 +112,7 @@ export function summaries() {
 /** Longest and current consecutive-day watching streak. */
 export function streaks() {
   const days = db.prepare(
-    "SELECT DISTINCT date(watched_at, 'localtime') d FROM watch_history ORDER BY d"
+    "SELECT DISTINCT date(watched_at, 'localtime') d FROM dated_history ORDER BY d"
   ).all().map((r) => r.d);
 
   if (!days.length) return { current: 0, longest: 0, last_watched: null };
@@ -204,13 +204,13 @@ export function wrapped(year = new Date().getFullYear()) {
            COALESCE(SUM(CASE WHEN kind='movie' THEN 1 ELSE 0 END), 0) movies,
            COALESCE(SUM(CASE WHEN kind='episode' THEN 1 ELSE 0 END), 0) episodes,
            COUNT(DISTINCT date(watched_at, 'localtime')) active_days
-    FROM watch_history WHERE watched_at >= ? AND watched_at < ?
+    FROM dated_history WHERE watched_at >= ? AND watched_at < ?
   `).get(...p);
 
   const topShows = db.prepare(`
     SELECT s.id, s.title, s.poster_path, s.custom_poster,
            COUNT(*) episodes, COALESCE(SUM(h.minutes),0) minutes
-    FROM watch_history h JOIN shows s ON s.id = h.show_id
+    FROM dated_history h JOIN shows s ON s.id = h.show_id
     WHERE h.watched_at >= ? AND h.watched_at < ?
     GROUP BY s.id ORDER BY minutes DESC LIMIT 10
   `).all(...p);
@@ -218,19 +218,19 @@ export function wrapped(year = new Date().getFullYear()) {
   const byMonth = db.prepare(`
     SELECT strftime('%m', watched_at, 'localtime') month, COUNT(*) items,
            COALESCE(SUM(minutes),0) minutes
-    FROM watch_history WHERE watched_at >= ? AND watched_at < ?
+    FROM dated_history WHERE watched_at >= ? AND watched_at < ?
     GROUP BY month ORDER BY month
   `).all(...p);
 
   const busiestDay = db.prepare(`
     SELECT date(watched_at, 'localtime') day, COUNT(*) items, COALESCE(SUM(minutes),0) minutes
-    FROM watch_history WHERE watched_at >= ? AND watched_at < ?
+    FROM dated_history WHERE watched_at >= ? AND watched_at < ?
     GROUP BY day ORDER BY minutes DESC LIMIT 1
   `).get(...p);
 
   const genreCount = new Map();
   const rows = db.prepare(`
-    SELECT DISTINCT s.genres FROM watch_history h JOIN shows s ON s.id = h.show_id
+    SELECT DISTINCT s.genres FROM dated_history h JOIN shows s ON s.id = h.show_id
     WHERE h.watched_at >= ? AND h.watched_at < ? AND s.genres IS NOT NULL
   `).all(...p);
   for (const r of rows) {
@@ -278,7 +278,7 @@ export function periods(unit = 'week', count = 12) {
       COALESCE(SUM(CASE WHEN kind = 'movie' THEN 1 ELSE 0 END), 0) AS movies,
       COALESCE(SUM(CASE WHEN kind = 'episode' THEN 1 ELSE 0 END), 0) AS episodes,
       COUNT(DISTINCT show_id) AS shows
-    FROM watch_history
+    FROM dated_history
     GROUP BY start
   `).all();
 

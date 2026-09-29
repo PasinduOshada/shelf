@@ -42,6 +42,11 @@ addColumnIfMissing('files', 'manual_episode', 'INTEGER');
 // Real stream details read from the file (JSON), and when.
 addColumnIfMissing('files', 'media_info', 'TEXT');
 addColumnIfMissing('files', 'probed_at', 'TEXT');
+// Viewing recorded without a real time: "I've seen the whole series" counts
+// towards what you've watched, but not as hours spent today.
+addColumnIfMissing('watch_history', 'undated', 'INTEGER NOT NULL DEFAULT 0');
+// What charts, streaks and Wrapped read: only viewing that has a date.
+db.exec('CREATE VIEW IF NOT EXISTS dated_history AS SELECT * FROM watch_history WHERE undated = 0');
 
 db.exec('CREATE INDEX IF NOT EXISTS idx_fileops_batch ON file_operations(batch_id)');
 

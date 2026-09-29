@@ -6,11 +6,16 @@ import { db, transaction } from './db.js';
 
 const nowIso = () => new Date().toISOString();
 
-function logWatch({ kind, episodeId = null, movieId = null, showId = null, minutes = 0, isRewatch = false, at = null }) {
+function logWatch({
+  kind, episodeId = null, movieId = null, showId = null, minutes = 0, isRewatch = false, at = null, undated = false,
+}) {
   db.prepare(
-    `INSERT INTO watch_history (id, kind, episode_id, movie_id, show_id, minutes, is_rewatch, watched_at)
-     VALUES (?,?,?,?,?,?,?,?)`
-  ).run(randomUUID(), kind, episodeId, movieId, showId, Math.round(minutes) || 0, isRewatch ? 1 : 0, at || sqlNow());
+    `INSERT INTO watch_history (id, kind, episode_id, movie_id, show_id, minutes, is_rewatch, watched_at, undated)
+     VALUES (?,?,?,?,?,?,?,?,?)`
+  ).run(
+    randomUUID(), kind, episodeId, movieId, showId, Math.round(minutes) || 0, isRewatch ? 1 : 0,
+    at || sqlNow(), undated ? 1 : 0
+  );
 }
 
 // watch_history uses SQLite's "YYYY-MM-DD HH:MM:SS" (UTC), which stats group by.
@@ -159,9 +164,11 @@ export function setShowWatched(showId, { season = null, watched = true, upTo = n
         ).run(ep.id, show.id, watched ? 1 : 0, watched ? nowIso() : null, watched ? 1 : 0);
       }
       if (watched && !existing?.watched) {
+        // Marking a run of episodes is catching Shelf up on the past, not
+        // three hundred hours of viewing today: it counts, undated.
         logWatch({
           kind: 'episode', episodeId: ep.id, showId: show.id,
-          minutes: ep.runtime || show.episode_runtime || 42,
+          minutes: ep.runtime || show.episode_runtime || 42, undated: true,
         });
       }
     }

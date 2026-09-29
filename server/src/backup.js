@@ -51,7 +51,7 @@ export function exportBackup() {
         duration_seconds: r.duration_seconds }))
       .filter((r) => r.movie),
     history: db.prepare('SELECT * FROM watch_history').all().map((h) => ({
-      kind: h.kind, watched_at: h.watched_at, minutes: h.minutes, is_rewatch: h.is_rewatch,
+      kind: h.kind, watched_at: h.watched_at, minutes: h.minutes, is_rewatch: h.is_rewatch, undated: h.undated,
       ...(h.kind === 'movie' ? { movie: movieKeyById.get(h.movie_id) } : epRef(h.episode_id)),
     })).filter((h) => h.movie || h.show),
     libraries: db.prepare('SELECT path, kind, label FROM libraries').all(),
@@ -161,8 +161,8 @@ export function importBackup(data, { overwrite = false, settings = true } = {}) 
     const hasHistory = db.prepare(
       'SELECT 1 FROM watch_history WHERE kind = ? AND watched_at = ? AND IFNULL(episode_id, \'\') = ? AND IFNULL(movie_id, \'\') = ?'
     );
-    const addHistory = db.prepare(`INSERT INTO watch_history (id, kind, episode_id, movie_id, show_id, watched_at, minutes, is_rewatch)
-      VALUES (lower(hex(randomblob(16))),?,?,?,?,?,?,?)`);
+    const addHistory = db.prepare(`INSERT INTO watch_history (id, kind, episode_id, movie_id, show_id, watched_at, minutes, is_rewatch, undated)
+      VALUES (lower(hex(randomblob(16))),?,?,?,?,?,?,?,?)`);
     for (const h of data.history || []) {
       let episodeId = null;
       let movieId = null;
@@ -178,7 +178,7 @@ export function importBackup(data, { overwrite = false, settings = true } = {}) 
         showId = ep.show_id;
       }
       if (hasHistory.get(h.kind, h.watched_at, episodeId || '', movieId || '')) continue;
-      addHistory.run(h.kind, episodeId, movieId, showId, h.watched_at, h.minutes || 0, h.is_rewatch || 0);
+      addHistory.run(h.kind, episodeId, movieId, showId, h.watched_at, h.minutes || 0, h.is_rewatch || 0, h.undated ? 1 : 0);
       counts.history++;
     }
 
