@@ -113,15 +113,22 @@ function openWithDefault(path) {
 
 /** Resolve an indexed file: by file id, or the best copy of an episode or film. */
 export function findFile({ fileId, episodeId, movieId }) {
-  const order = 'ORDER BY size_bytes DESC LIMIT 1';
+  const order = 'ORDER BY size_bytes DESC';
   const cols = 'id, path, episode_id, movie_id';
-  let row = null;
-  if (fileId) row = db.prepare(`SELECT ${cols} FROM files WHERE id = ? AND is_missing = 0`).get(fileId);
-  else if (episodeId) row = db.prepare(`SELECT ${cols} FROM files WHERE episode_id = ? AND is_missing = 0 ${order}`).get(episodeId);
-  else if (movieId) row = db.prepare(`SELECT ${cols} FROM files WHERE movie_id = ? AND is_missing = 0 ${order}`).get(movieId);
-  if (!row) throw Object.assign(new Error('No file for that title'), { status: 404 });
-  if (!existsSync(row.path)) throw Object.assign(new Error('The file is no longer on disk. Rescan to update.'), { status: 410 });
-  return row;
+  let rows = [];
+  if (fileId) rows = db.prepare(`SELECT ${cols} FROM files WHERE id = ? AND is_missing = 0`).all(fileId);
+  else if (episodeId) rows = db.prepare(`SELECT ${cols} FROM files WHERE episode_id = ? AND is_missing = 0 ${order}`).all(episodeId);
+  else if (movieId) rows = db.prepare(`SELECT ${cols} FROM files WHERE movie_id = ? AND is_missing = 0 ${order}`).all(movieId);
+  if (!rows.length) throw Object.assign(new Error('No file for that title'), { status: 404 });
+  // The best copy that is actually reachable: the biggest one may be on a
+  // drive that is not plugged in while a smaller one is right here.
+  const row = rows.find((r) => existsSync(r.path));
+  if (row) return row;
+  const drive = rows[0].path.match(/^[a-z]:[\\/]/i)?.[0];
+  if (drive && !existsSync(drive)) {
+    throw Object.assign(new Error(`The ${drive.slice(0, 2).toUpperCase()} drive isn't connected. Plug it in and try again.`), { status: 410 });
+  }
+  throw Object.assign(new Error('The file is no longer on disk. Rescan to update.'), { status: 410 });
 }
 
 /** Where to start: the saved position, unless it is at the very start or end. */
