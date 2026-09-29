@@ -15,6 +15,7 @@ import WrappedPage from './pages/WrappedPage';
 import OrganizePage from './pages/OrganizePage';
 import SettingsPage from './pages/SettingsPage';
 import WelcomePage from './pages/WelcomePage';
+import PageError from './components/PageError';
 import { applyTheme, loadTheme } from './themes';
 import './index.css';
 
@@ -28,15 +29,22 @@ const router = createBrowserRouter([
     path: '/',
     element: <Layout />,
     children: [
-      { index: true, element: <LibraryPage /> },
-      { path: 'show/:id', element: <ShowPage /> },
-      { path: 'movie/:id', element: <MoviePage /> },
-      { path: 'up-next', element: <UpNextPage /> },
-      { path: 'missing', element: <MissingPage /> },
-      { path: 'stats', element: <StatsPage /> },
-      { path: 'wrapped', element: <WrappedPage /> },
-      { path: 'organize', element: <OrganizePage /> },
-      { path: 'settings', element: <SettingsPage /> },
+      {
+        // Pathless: a page that fails to draw shows its error inside the app
+        // shell, rather than taking the sidebar and everything else with it.
+        errorElement: <PageError />,
+        children: [
+          { index: true, element: <LibraryPage /> },
+          { path: 'show/:id', element: <ShowPage /> },
+          { path: 'movie/:id', element: <MoviePage /> },
+          { path: 'up-next', element: <UpNextPage /> },
+          { path: 'missing', element: <MissingPage /> },
+          { path: 'stats', element: <StatsPage /> },
+          { path: 'wrapped', element: <WrappedPage /> },
+          { path: 'organize', element: <OrganizePage /> },
+          { path: 'settings', element: <SettingsPage /> },
+        ],
+      },
     ],
   },
 ]);
