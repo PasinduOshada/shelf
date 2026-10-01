@@ -454,7 +454,14 @@ export default function ShowPage() {
                     Mark season watched
                   </button>
                   <button
-                    onClick={() => markSeason(season.season_number, false)}
+                    onClick={() => {
+                      // Right beside "Mark season watched", and it takes the
+                      // season's viewings out of your history for good.
+                      if (season.watched_count && !confirm(
+                        `Clear what you have watched of this season? That removes ${plural(season.watched_count, 'episode')} from your history.`
+                      )) return;
+                      markSeason(season.season_number, false);
+                    }}
                     disabled={busy}
                     className="text-[11px] text-ink-dim transition hover:text-ink disabled:opacity-40"
                   >
