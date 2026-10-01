@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { db, getSetting, setSetting, transaction, sortTitle } from './db.js';
 import { getSecret } from './secrets.js';
 import { cacheImage } from './images.js';
-import { parseFilename, parseFolderName } from './scanner/parse.js';
+import { parseFilename, parseFolderName, countryHint } from './scanner/parse.js';
 
 const BASE = 'https://api.themoviedb.org/3';
 
@@ -184,7 +184,7 @@ function similarity(local, remote) {
 
 const MATCH_THRESHOLD = 0.55;
 
-function pickBest(results, locals, year, kind) {
+function pickBest(results, locals, year, kind, country = null) {
   const nameKey = kind === 'tv' ? 'name' : 'title';
   const dateKey = kind === 'tv' ? 'first_air_date' : 'release_date';
   let best = null;
@@ -194,6 +194,11 @@ function pickBest(results, locals, year, kind) {
       s = Math.max(s, similarity(t, r[nameKey]), similarity(t, r[`original_${nameKey}`]));
     }
     if (year && r[dateKey]?.startsWith(String(year))) s += 0.15;
+    // "The Office (US)" and "The Office (UK)" are the same words; the country
+    // the name gives is what tells them apart.
+    if (country && Array.isArray(r.origin_country) && r.origin_country.length) {
+      s += r.origin_country.includes(country) ? 0.2 : -0.1;
+    }
     // TMDB flags premieres, featurettes and trailers as `video`; never prefer them.
     if (r.video === true) s -= 0.3;
     s += Math.min(r.popularity || 0, 100) / 2000; // tie-break toward the well-known one
@@ -221,7 +226,7 @@ function candidateQueries(primary) {
   return out.slice(0, 7);
 }
 
-async function findMatch(kind, primary, scoreAgainst, years) {
+async function findMatch(kind, primary, scoreAgainst, years, country = null) {
   const endpoint = kind === 'tv' ? '/search/tv' : '/search/movie';
   const yearParam = kind === 'tv' ? 'first_air_date_year' : 'year';
   const year = years.find(Boolean) || null;
@@ -230,7 +235,7 @@ async function findMatch(kind, primary, scoreAgainst, years) {
     for (const y of year ? [year, null] : [null]) {
       const data = await tmdb(endpoint, { query, [yearParam]: y, include_adult: 'false' });
       if (!data?.results?.length) continue;
-      const best = pickBest(data.results, scoreAgainst, year, kind);
+      const best = pickBest(data.results, scoreAgainst, year, kind, country);
       if (best && best.score >= MATCH_THRESHOLD) return best.result;
     }
   }
@@ -251,10 +256,13 @@ function showHints(show) {
   }
   const fileTitles = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
   const folderTitle = show.folder_name ? parseFolderName(show.folder_name).title : null;
+  // The folder is named by a person, so it speaks first; then the files.
+  const country = countryHint(show.folder_name) ||
+    files.map((f) => countryHint(f.filename)).find(Boolean) || null;
 
   const primary = [...new Set([fileTitles[0], folderTitle, show.title].filter(Boolean))];
   const scoreAgainst = [...new Set([...primary, ...fileTitles])];
-  return { primary, scoreAgainst, years };
+  return { primary, scoreAgainst, years, country };
 }
 
 // Pure matching helpers, exported for the regression tests.
@@ -264,9 +272,9 @@ export { similarity, candidateQueries, pickBest, MATCH_THRESHOLD };
  * Official title + year for a parsed title, or null. Used by the organiser to
  * name folders; the same forgiving matcher the library uses.
  */
-export async function lookupTitle(kind, title, year, alternatives = []) {
+export async function lookupTitle(kind, title, year, alternatives = [], country = null) {
   const names = [title, ...alternatives];
-  const hit = await findMatch(kind, names, names, [year]);
+  const hit = await findMatch(kind, names, names, [year], country);
   if (!hit) return null;
   const date = kind === 'tv' ? hit.first_air_date : hit.release_date;
   const hitYear = date ? Number(date.slice(0, 4)) : null;
@@ -661,8 +669,8 @@ export async function enrichAll({ onProgress = null, refresh = false } = {}) {
   for (const show of shows) {
     await attempt('shows', 'shows', show, (row) => {
       if (refresh) return { id: row.tmdb_id };
-      const { primary, scoreAgainst, years } = showHints(row);
-      return findMatch('tv', primary, scoreAgainst, years);
+      const { primary, scoreAgainst, years, country } = showHints(row);
+      return findMatch('tv', primary, scoreAgainst, years, country);
     }, (id, tmdbId) => enrichShow(id, tmdbId));
   }
   for (const movie of movies) {

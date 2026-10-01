@@ -23,7 +23,7 @@ import { db, transaction, getSetting } from './db.js';
 import { DATA_DIR } from './paths.js';
 import {
   parseFilename, parseFolderName, isVideoFile, isSubtitleFile,
-  isJunkName, isClipFile, SKIP_DIR, SAMPLE_DIR,
+  isJunkName, isClipFile, SKIP_DIR, SAMPLE_DIR, countryHint,
 } from './scanner/parse.js';
 import { hasApiKey, lookupTitle, seasonEpisodeNames } from './tmdb.js';
 import { probeAvailable, probeFile } from './mediainfo.js';
@@ -689,13 +689,13 @@ export async function planImport({
   const lookups = tmdbOn ? [...shows.values()].filter((g) => !g.known).length + movieKeys.size : 0;
   let looked = 0;
   const lookupErrors = [];
-  const lookup = async (kind, title, year, alternatives = []) => {
+  const lookup = async (kind, title, year, alternatives = [], country = null) => {
     onProgress({ phase: 'Looking up official titles', done: looked, total: lookups, current: title });
-    const cacheKey = JSON.stringify([kind, title, year, alternatives]);
+    const cacheKey = JSON.stringify([kind, title, year, alternatives, country]);
     const cached = lookupCache.get(cacheKey);
     if (cached && Date.now() - cached.at < LOOKUP_TTL_MS) return cached.hit;
     try {
-      const hit = await lookupTitle(kind, title, year, alternatives);
+      const hit = await lookupTitle(kind, title, year, alternatives, country);
       lookupCache.set(cacheKey, { hit, at: Date.now() });
       return hit;
     } catch (err) {
@@ -719,7 +719,10 @@ export async function planImport({
     // A misspelled folder ("Oggy & The Crokroachers") may still be found by
     // the spelling in the file names, and the other way round.
     const alternatives = [mostCommon(g.titles), g.folderTitle].filter((t) => t && t !== g.title);
-    const hit = await lookup('tv', g.title, g.year, alternatives);
+    // "The.Office.US.S02E01": which Office the names point at.
+    const country = countryHint(g.home && basename(g.home)) ||
+      g.items.map((i) => countryHint(i.video?.name)).find(Boolean) || null;
+    const hit = await lookup('tv', g.title, g.year, alternatives, country);
     if (!hit) continue;
     Object.assign(g, { title: hit.title, year: hit.year || g.year, tmdb_id: hit.tmdb_id, source: 'tmdb' });
     if (opts.rename && opts.tv.episodeTitle) {

@@ -266,6 +266,26 @@ export function parseFolderName(folderName) {
   return { title: s.trim(), year };
 }
 
+const COUNTRIES = { US: 'US', USA: 'US', UK: 'GB', GB: 'GB', AU: 'AU', NZ: 'NZ', CA: 'CA', IE: 'IE' };
+
+/**
+ * The country a remake's name points at: "The Office (US)", "Shameless.US.S01E01",
+ * "Being Human UK (2008)". Upper case only, and only where such a tag goes --
+ * bracketed, or just before the year or episode -- so the film "Us" or a show
+ * called "Among Us" never reads as one. Returns an ISO code (UK is GB) or null.
+ */
+export function countryHint(name) {
+  const s = String(name || '');
+  const m = s.match(
+    /(?:^|[\s._[(-])(USA|US|UK|GB|AU|NZ|CA|IE)(?:[\])]|(?=[\s._-]*(?:$|[Ss]\d{1,2}[\s._-]*[Ee]\d|\(?(?:19|20)\d{2}\b|\d{1,2}x\d)))/
+  );
+  if (!m) return null;
+  // In a name written all in capitals ("AMONG US") a bare "US" is just a word.
+  const bracketed = /[[(]$/.test(s.slice(0, m.index + 1)) || /^[\])]/.test(s.slice(m.index + m[0].length - 1));
+  if (!/[a-z]/.test(s) && !bracketed) return null;
+  return COUNTRIES[m[1]];
+}
+
 export function isVideoFile(filename) {
   return VIDEO_EXT.has(stripExt(filename).ext);
 }

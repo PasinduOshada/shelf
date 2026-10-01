@@ -147,3 +147,23 @@ test('episode ordering follows the files on disk (Money Heist, real layouts)', (
   const severance = [...Array(9)].map((_, i) => ({ season: 1, episode: i + 1 }));
   assert.equal(m.pickOrdering(layout([9, 10]), [{ id: 'x', counts: layout([20]) }], severance).id, null);
 });
+
+test('a country in the name picks between remakes of the same title', async () => {
+  const { pickBest } = await import('../src/tmdb.js');
+  const { countryHint } = await import('../src/scanner/parse.js');
+  // Same words; only the country tells them apart.
+  const results = [
+    { id: 2290, name: 'The Office', first_air_date: '2001-07-09', origin_country: ['GB'], popularity: 90 },
+    { id: 2316, name: 'The Office', first_air_date: '2005-03-24', origin_country: ['US'], popularity: 60 },
+  ];
+  const pick = (country) => pickBest(results, ['The Office'], null, 'tv', country).result.id;
+  assert.equal(pick(countryHint('The Office (US)')), 2316);
+  assert.equal(pick(countryHint('The.Office.UK.S01E01.mkv')), 2290);
+  assert.equal(pick(null), 2290, 'with no hint, the better-known one still wins');
+
+  // Only where a tag goes, and never a word in a title.
+  assert.equal(countryHint('Us (2019)'), null);
+  assert.equal(countryHint('AMONG US'), null);
+  assert.equal(countryHint('US Marshals (1998)'), null);
+  assert.equal(countryHint('Shameless.US.S01E01.720p.mkv'), 'US');
+});
