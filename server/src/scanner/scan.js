@@ -593,7 +593,9 @@ async function scanOnce({ libraryId = null } = {}) {
   };
 
   progress.phase = 'Checking what is still there';
-  const known = db.prepare('SELECT id, path FROM files WHERE is_missing = 0').all();
+  // Missing rows too, for the name check alone: a recording deleted before
+  // this build would otherwise stay listed as a missing film.
+  const known = db.prepare('SELECT id, path, is_missing FROM files').all();
   const CHECK_BATCH = 400;
   for (let at = 0; at < known.length; at += CHECK_BATCH) {
     await breathe();
@@ -602,7 +604,12 @@ async function scanOnce({ libraryId = null } = {}) {
         // Marking a whole library missing because its drive is unplugged would
         // throw away everything Shelf knows about it, for no reason.
         if (unreachable(row.path)) continue;
-        if (!existsSync(row.path)) {
+        if (isNotLibraryMedia(row.path, basename(row.path))) {
+          // Indexed by an older build before it knew better (a screen
+          // recording, a sample). Deleted or not, it was never a film to keep
+          // a record of, so it goes rather than lingering as "missing".
+          db.prepare('DELETE FROM files WHERE id = ?').run(row.id);
+        } else if (!row.is_missing && !existsSync(row.path)) {
           db.prepare('UPDATE files SET is_missing = 1 WHERE id = ?').run(row.id);
           stats.missing++;
         }
@@ -612,6 +619,7 @@ async function scanOnce({ libraryId = null } = {}) {
 
   isHidden = nothingHidden;
   pruneEmptyShows();
+  pruneEmptyMovies();
   // Fold the write-ahead log back in. A scan writes a lot at once, and the log
   // otherwise stays as large as the busiest scan for the rest of the session.
   try {
@@ -647,6 +655,25 @@ function pruneEmptyShows() {
     for (const show of dead) db.prepare('DELETE FROM shows WHERE id = ?').run(show.id);
   });
   return dead.length;
+}
+
+/**
+ * Films the library found that have no file left at all, and nothing of
+ * yours attached. Shows were always tidied like this; films never were, so a
+ * file that stopped counting left an empty film behind.
+ */
+function pruneEmptyMovies() {
+  const result = db.prepare(`
+    DELETE FROM movies
+    WHERE library_id IS NOT NULL
+      AND is_favorite = 0
+      AND user_status IS NULL AND user_rating IS NULL
+      AND (notes IS NULL OR notes = '')
+      AND NOT EXISTS (SELECT 1 FROM files f WHERE f.movie_id = movies.id)
+      AND NOT EXISTS (SELECT 1 FROM watch_history h WHERE h.movie_id = movies.id)
+      AND NOT EXISTS (SELECT 1 FROM movie_state s WHERE s.movie_id = movies.id AND (s.watched = 1 OR s.rating IS NOT NULL))
+  `).run();
+  return result.changes;
 }
 
 export function addLibrary({ path, kind, label = null }) {

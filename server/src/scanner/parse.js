@@ -283,6 +283,11 @@ const JUNK_NAMES = [
   /^(?:whatsapp|telegram|signal|messenger|snapchat|instagram|tiktok|facebook|screenrecorder)[\s._-]*(?:video|clip|reel)?(?:[\s._-]*\d.*)?$/i,
   // Camera timestamps: "20250101_101010", "2025-01-01 10.10.10".
   /^\d{4}[-_]?\d{2}[-_]?\d{2}[\s._-]+\d{2}[-_.]?\d{2}/,
+  // Screen recordings end with one instead: Xbox Game Bar writes
+  // "<window title> 2026-03-11 10-45-00", and the window title can be
+  // anything ("Meet - Work - Microsoft Edge"). A film or episode name never
+  // carries a time of day down to the second.
+  /\s\d{4}-\d{2}-\d{2}\s\d{2}-\d{2}-\d{2}$/,
 ];
 
 // Release clips put the word first or last ("sample.mkv", "Film.2020-sample").

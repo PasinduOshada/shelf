@@ -93,6 +93,28 @@ test('samples, trailers and phone clips are left out', () => {
   assert.equal(stats.skipped, 7);
 });
 
+test('a screen recording an older build listed as a film is taken out again', async () => {
+  // From a real library: Xbox Game Bar recordings ("Meet - Work - Microsoft
+  // Edge 2026-03-11 10-45-00.mp4") were listed as films. One is still on
+  // disk, one has been deleted since; neither should stay, not even as
+  // "missing".
+  const films = join(work, 'Films');
+  const kept = join(films, 'Captures', 'Meet - Work - Microsoft Edge 2026-03-11 10-45-00.mp4');
+  const gone = join(films, 'Captures', 'Meet - Work - Microsoft Edge 2026-03-11 11-28-30.mp4');
+  file(kept);
+  const lib = db.db.prepare('SELECT id FROM libraries WHERE path = ?').get(films).id;
+  for (const [id, path, missing] of [['rec-1', kept, 0], ['rec-2', gone, 1]]) {
+    db.db.prepare("INSERT INTO movies (id, library_id, title, sort_title) VALUES (?, ?, 'Meet Work Microsoft Edge', 'meet')").run(id, lib);
+    db.db.prepare('INSERT INTO files (id, path, filename, movie_id, is_missing) VALUES (?, ?, ?, ?, ?)')
+      .run(id, path, path.split(/[\\/]/).pop(), id, missing);
+  }
+
+  await scanner.scanLibraries();
+
+  assert.equal(db.db.prepare("SELECT COUNT(*) c FROM files WHERE id LIKE 'rec-%'").get().c, 0);
+  assert.equal(db.db.prepare("SELECT COUNT(*) c FROM movies WHERE id LIKE 'rec-%'").get().c, 0, 'the empty films go too');
+});
+
 test('the episodes and films themselves are kept', () => {
   const kept = paths();
   assert.ok(kept.includes('Severance.S01E01.1080p.mkv'));
