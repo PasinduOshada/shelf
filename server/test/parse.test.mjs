@@ -100,3 +100,13 @@ test('initialisms keep their capitals', async () => {
   assert.equal(smartCase('a knight of the seven kingdoms'), 'A Knight of the Seven Kingdoms');
   assert.equal(smartCase('Dune: Part Two'), 'Dune: Part Two');
 });
+
+test('search ignores punctuation, and a typed % is not a wildcard', async () => {
+  const { searchMatcher } = await import('../src/queries.js');
+  assert.ok(searchMatcher('spiderman')('Spider-Man: Across the Spider-Verse'));
+  assert.ok(searchMatcher('mash')('M*A*S*H'));
+  assert.ok(searchMatcher('its always sunny')("It's Always Sunny in Philadelphia"));
+  assert.ok(searchMatcher('amelie')('Amélie'));
+  assert.ok(!searchMatcher('%')('Severance'), 'punctuation alone matches as typed');
+  assert.ok(!searchMatcher('_')('Severance'));
+});

@@ -44,6 +44,25 @@ function decorateMovie(row) {
   };
 }
 
+// ---------------------------------------------------------------- search
+
+/** Letters and digits only, accents folded: "Spider-Man" and "spiderman" meet. */
+const fold = (s) => String(s || '').toLowerCase().normalize('NFKD').replace(/[^\p{L}\p{N}]/gu, '');
+
+/**
+ * A matcher for what someone typed. Punctuation and spacing are ignored, so
+ * "mash" finds M*A*S*H and "its always sunny" finds It's Always Sunny. A query
+ * that is nothing but punctuation is matched as typed.
+ */
+export function searchMatcher(query) {
+  const q = fold(query);
+  if (!q) {
+    const raw = String(query || '').toLowerCase();
+    return (text) => String(text || '').toLowerCase().includes(raw);
+  }
+  return (text) => fold(text).includes(q);
+}
+
 // ---------------------------------------------------------------- shows
 
 export function listShows({ search = '', status = null, sort = 'title' } = {}) {
@@ -71,22 +90,23 @@ export function listShows({ search = '', status = null, sort = 'title' } = {}) {
   });
 
   if (search) {
-    const q = search.toLowerCase();
+    const matches = searchMatcher(search);
     // Episode names count too: people remember "Long, Long Time" without
-    // remembering which series it belongs to.
+    // remembering which series it belongs to. Matched here rather than with
+    // LIKE, where a typed "%" or "_" matched every episode there is.
     const hits = new Map();
     for (const row of db.prepare(`
       SELECT show_id, season_number, episode_number, title
       FROM episodes
-      WHERE title IS NOT NULL AND LOWER(title) LIKE '%' || ? || '%'
+      WHERE title IS NOT NULL
       ORDER BY season_number, episode_number
-    `).all(q)) {
-      if (!hits.has(row.show_id)) hits.set(row.show_id, row);
+    `).all()) {
+      if (!hits.has(row.show_id) && matches(row.title)) hits.set(row.show_id, row);
     }
-    out = out.filter((s) => s.title.toLowerCase().includes(q) || hits.has(s.id));
+    out = out.filter((s) => matches(s.title) || hits.has(s.id));
     for (const show of out) {
       const hit = hits.get(show.id);
-      if (hit && !show.title.toLowerCase().includes(q)) {
+      if (hit && !matches(show.title)) {
         show.search_hit = {
           season: hit.season_number, episode: hit.episode_number, title: hit.title,
         };
@@ -228,13 +248,9 @@ export function listMovies({ search = '', status = null, sort = 'title' } = {}) 
 
   let out = rows.map(decorateMovie);
   if (search) {
-    const q = search.toLowerCase();
+    const matches = searchMatcher(search);
     // The name on the file and the name TMDB gives can differ; both should find it.
-    out = out.filter((m) =>
-      m.title.toLowerCase().includes(q) ||
-      String(m.tmdb_title || '').toLowerCase().includes(q) ||
-      String(m.file_title || '').toLowerCase().includes(q)
-    );
+    out = out.filter((m) => matches(m.title) || matches(m.tmdb_title) || matches(m.file_title));
   }
   if (status) out = out.filter((m) => m.user_status === status);
 
