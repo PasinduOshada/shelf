@@ -9,7 +9,8 @@ const FORMAT = 'shelf-backup';
 const VERSION = 1;
 
 const SECRET_KEYS = /^(tmdb\.apiKey|opensubtitles\.|trakt\.(clientSecret|accessToken|refreshToken|expiresAt))/;
-const NOT_PORTABLE = /^(organize\.(autoLog|autoPending)|airing\.notified|tmdb\.last)/;
+// secrets.canary is encrypted with this computer's key and means nothing on another.
+const NOT_PORTABLE = /^(organize\.(autoLog|autoPending)|airing\.notified|tmdb\.last|secrets\.canary)/;
 
 const showKey = (s) => (s.tmdb_id ? `tmdb:${s.tmdb_id}` : `name:${String(s.folder_name || s.title).toLowerCase()}`);
 const movieKey = (m) => (m.tmdb_id ? `tmdb:${m.tmdb_id}` : `name:${String(m.title).toLowerCase()}|${m.year ?? ''}`);
@@ -187,6 +188,17 @@ export function importBackup(data, { overwrite = false, settings = true } = {}) 
         if (SECRET_KEYS.test(k) || NOT_PORTABLE.test(k)) continue;
         // Folder paths belong to the other computer; keep this machine's.
         if (/^organize\.(auto|last)$|^player\.path$/.test(k) && getSetting(k)) continue;
+        // Never arrive switched on: on a fresh install, the other computer's
+        // watched folders could exist here too, and files would start moving
+        // on a timer nobody set on this machine.
+        if (k === 'organize.auto') {
+          try {
+            setSetting(k, JSON.stringify({ ...JSON.parse(v), enabled: false }));
+          } catch {
+            // Not a config this version understands: leave it out.
+          }
+          continue;
+        }
         setSetting(k, v);
       }
     }

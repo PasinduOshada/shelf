@@ -440,6 +440,24 @@ test('unmarking twice does not erase an earlier viewing', async () => {
   db2.prepare("DELETE FROM shows WHERE id = 'twice'").run();
 });
 
+test('restoring a backup never switches automatic organizing on', async () => {
+  // A restore onto a fresh install brought the old computer's auto-organize
+  // across enabled, watched folders and all -- files would start moving here
+  // on a schedule nobody set.
+  const { getSetting, setSetting, db: db2 } = await import('../src/db.js');
+  const backup = m.backup.exportBackup();
+  backup.settings['organize.auto'] = JSON.stringify({ enabled: true, folders: ['D:\\Downloads'], tvRoot: 'E:\\TV' });
+  backup.settings['secrets.canary'] = 'enc.v1:from-another-computer';
+  db2.prepare("DELETE FROM settings WHERE key IN ('organize.auto', 'secrets.canary')").run();
+
+  m.backup.importBackup(backup);
+  const auto = JSON.parse(getSetting('organize.auto'));
+  assert.equal(auto.enabled, false, 'it arrives switched off');
+  assert.deepEqual(auto.folders, ['D:\\Downloads'], 'but the folders are kept for when it is switched on');
+  assert.notEqual(getSetting('secrets.canary'), 'enc.v1:from-another-computer');
+  setSetting('organize.auto', JSON.stringify({ enabled: false }));
+});
+
 test('an absurd chart window is trimmed instead of eating all the memory', async () => {
   // The window comes in on a URL and the chart holds one entry per day, so
   // ?days=99999999 used to ask for a hundred million of them and kill the
