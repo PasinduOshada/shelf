@@ -13,7 +13,7 @@ import { isSubtitleFile } from './scanner/parse.js';
 import { findFile } from './player.js';
 
 const API = 'https://api.opensubtitles.com/api/v1';
-const USER_AGENT = 'Shelf v0.1.5';
+const USER_AGENT = 'Shelf v0.1.6';
 
 // ---------------------------------------------------------------- local files
 
