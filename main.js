@@ -249,6 +249,17 @@ function setupUpdates() {
     updateState = { status: 'unavailable', message: 'Updates are checked in the installed app' };
     return null;
   }
+  // The updater can only update by running the installer. For the portable
+  // copy that would install a second Shelf nobody asked for, and a copy that
+  // Scoop or winget manages is theirs to update.
+  if (process.env.PORTABLE_EXECUTABLE_FILE) {
+    updateState = { status: 'unavailable', message: 'Portable copy: download new versions from GitHub' };
+    return null;
+  }
+  if (/[\\/]scoop[\\/]apps[\\/]/i.test(process.execPath)) {
+    updateState = { status: 'unavailable', message: 'Updated by Scoop: run scoop update shelf' };
+    return null;
+  }
   const { autoUpdater } = require('electron-updater');
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
