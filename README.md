@@ -199,7 +199,7 @@ npm start          # run the desktop app
 npm run dist       # build installers into dist-desktop/, with checksums
 ```
 
-On Windows that produces `Shelf-Setup-0.1.6.exe` (installer) and `Shelf-0.1.6.exe` (portable),
+On Windows that produces `Shelf-Setup-0.1.7.exe` (installer) and `Shelf-0.1.7.exe` (portable),
 ~120 MB each, plus `SHA256SUMS.txt` and `RELEASE-NOTES.md` to go with the release.
 
 The desktop build keeps its database and uploaded posters in `%APPDATA%/Shelf/`, entirely
@@ -225,11 +225,21 @@ What you get instead is a checksum for every file. Compare the one you downloade
 `SHA256SUMS.txt` on the release:
 
 ```powershell
-Get-FileHash "Shelf-Setup-0.1.6.exe" -Algorithm SHA256
+Get-FileHash "Shelf-Setup-0.1.7.exe" -Algorithm SHA256
 ```
 
 If the hash matches, the file is exactly what was built from this repository. If it does not,
 delete it and download again from the releases page — never from anywhere else.
+
+#### With Scoop
+
+```powershell
+scoop bucket add shelf https://github.com/PasinduOshada/shelf
+scoop install shelf/shelf
+```
+
+`scoop update shelf` brings it up to date. A Scoop copy leaves updating to Scoop; the
+installer version updates itself.
 
 ## Development
 

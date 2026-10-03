@@ -37,7 +37,7 @@ body:
     attributes:
       label: Shelf version
       description: Settings, at the bottom, or the installer you ran.
-      placeholder: "0.1.6"
+      placeholder: "0.1.7"
     validations:
       required: true
 
