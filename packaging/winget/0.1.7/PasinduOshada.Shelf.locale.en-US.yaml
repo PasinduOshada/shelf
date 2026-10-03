@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: PasinduOshada.Shelf
+PackageVersion: 0.1.7
+PackageLocale: en-US
+Publisher: Pasindu Oshada
+PublisherUrl: https://github.com/PasinduOshada
+PublisherSupportUrl: https://github.com/PasinduOshada/shelf/issues
+Author: Pasindu Oshada
+PackageName: Shelf
+PackageUrl: https://github.com/PasinduOshada/shelf
+License: MIT
+LicenseUrl: https://github.com/PasinduOshada/shelf/blob/main/LICENSE
+ShortDescription: Local-first tracker and organizer for the TV and film files on your computer.
+Description: |-
+  Shelf reads the folders that hold your TV series and films and keeps track of what you own,
+  what you have watched and which episodes are missing. It finds duplicate copies, imports your
+  TV Time history, and can rename and organize downloads with a preview and undo for every batch.
+  Everything stays on your computer and it works offline; artwork and episode lists from TMDB
+  are optional.
+Moniker: shelf
+Tags:
+- episode-tracker
+- file-renamer
+- media-library
+- media-organizer
+- movie-tracker
+- offline
+- tmdb
+- tv-tracker
+- watchlist
+ReleaseNotesUrl: https://github.com/PasinduOshada/shelf/releases/tag/v0.1.7
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0
