@@ -9,6 +9,8 @@ import { randomUUID } from 'node:crypto';
 import { db, setSetting, getSetting, sortTitle, transaction } from '../db.js';
 import { UPLOADS_DIR } from '../paths.js';
 import { dropUpload } from '../storage.js';
+import { hiddenIn } from '../hidden.js';
+import { SKIP_DIR } from '../scanner/parse.js';
 import { scanLibraries, addLibrary, scanStatus } from '../scanner/scan.js';
 import * as q from '../queries.js';
 import {
@@ -166,8 +168,12 @@ router.get('/browse', (req, res) => {
         : ['/'];
       return res.json({ path: null, parent: null, dirs: roots.map((p) => ({ name: p, path: p })) });
     }
+    // The same folders a scan would walk past -- the recycle bin, System
+    // Volume Information, Windows itself, anything hidden -- are not offered.
+    const hidden = hiddenIn(target);
     const dirs = readdirSync(target, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
+      .filter((e) => e.isDirectory() && !SKIP_DIR.test(e.name))
+      .filter((e) => !hidden(join(target, e.name), e.name))
       .map((e) => ({ name: e.name, path: join(target, e.name) }));
     res.json({ path: target, dirs });
   } catch (err) {

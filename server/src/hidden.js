@@ -6,16 +6,16 @@
 // a single native traversal, rather than a shell call per folder. Everywhere
 // else, and for names like ".sync" on Windows too, a leading dot is the rule.
 import { execFileSync } from 'node:child_process';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 /** Every hidden file and folder under `root`, lowercased, as full paths. */
-function hiddenUnder(root) {
+function hiddenUnder(root, { recursive = true } = {}) {
   const found = new Set();
   if (process.platform !== 'win32') return found;
   try {
     const out = execFileSync(
       'cmd',
-      ['/d', '/u', '/c', 'dir', '/a:h', '/b', '/s', resolve(root)],
+      ['/d', '/u', '/c', 'dir', '/a:h', '/b', ...(recursive ? ['/s'] : []), resolve(root)],
       {
         encoding: 'buffer', windowsHide: true, timeout: 120_000, maxBuffer: 64 * 1024 * 1024,
         // "File Not Found" on stderr is the ordinary answer, not an error worth printing.
@@ -43,6 +43,15 @@ export function hiddenFilter(roots) {
   for (const root of roots) {
     for (const path of hiddenUnder(root)) hidden.add(path);
   }
+  return (path, name) => name.startsWith('.') || hidden.has(String(path).toLowerCase());
+}
+
+/**
+ * The same test for the entries of one folder only, for listing it in the
+ * folder picker: a whole-drive pass per click would be far too slow.
+ */
+export function hiddenIn(dir) {
+  const hidden = hiddenUnder(dir, { recursive: false });
   return (path, name) => name.startsWith('.') || hidden.has(String(path).toLowerCase());
 }
 
