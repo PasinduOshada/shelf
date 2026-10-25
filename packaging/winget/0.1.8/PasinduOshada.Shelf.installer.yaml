@@ -1,0 +1,14 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+PackageIdentifier: PasinduOshada.Shelf
+PackageVersion: 0.1.8
+InstallerType: nullsoft
+Scope: user
+UpgradeBehavior: install
+ReleaseDate: 2026-10-25
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/PasinduOshada/shelf/releases/download/v0.1.8/Shelf-Setup-0.1.8.exe
+  InstallerSha256: BAEA0A7E78D697392AC131395DC2A09FA393AF31D362D330B71F4053DB586C6D
+ManifestType: installer
+ManifestVersion: 1.6.0
