@@ -38,6 +38,48 @@ export function toSqlTime(value) {
  * `at` backdates the watch (imports); `ifUnwatched` skips episodes already
  * watched, so re-importing a history never double-counts.
  */
+// ---------------------------------------------------------------- undo
+// Unticking by mistake and ticking straight back used to turn a viewing from
+// last year into "watched today", flagged as a rewatch and counted twice. An
+// unmark now keeps what it removed for a few minutes; a re-tick inside that
+// window puts it back exactly as it was. Ticking again later is a real rewatch.
+const UNDO_MS = 10 * 60_000;
+
+function latestRow(column, id) {
+  return db.prepare(`SELECT * FROM watch_history WHERE ${column} = ? ORDER BY watched_at DESC LIMIT 1`).get(id);
+}
+
+/** Remove the latest viewing, remembering it on the state row. */
+function unmark(table, key, column, id, stateWatchedAt) {
+  const row = latestRow(column, id);
+  if (row) db.prepare('DELETE FROM watch_history WHERE id = ?').run(row.id);
+  db.prepare(`UPDATE ${table} SET undo = ? WHERE ${key} = ?`)
+    .run(JSON.stringify({ at: Date.now(), watched_at: stateWatchedAt, row: row || null }), id);
+}
+
+/** The viewing to restore, if this mark undoes a recent unmark. */
+function recentUnmark(existing) {
+  if (!existing?.undo || existing.watched) return null;
+  try {
+    const undo = JSON.parse(existing.undo);
+    return Date.now() - undo.at <= UNDO_MS ? undo : null;
+  } catch {
+    return null;
+  }
+}
+
+function restore(table, key, id, undo) {
+  db.prepare(`UPDATE ${table} SET watched = 1, watched_at = ?, undo = NULL WHERE ${key} = ?`)
+    .run(undo.watched_at, id);
+  const r = undo.row;
+  if (r) {
+    db.prepare(
+      `INSERT INTO watch_history (id, kind, episode_id, movie_id, show_id, minutes, is_rewatch, watched_at, undated)
+       VALUES (?,?,?,?,?,?,?,?,?)`
+    ).run(r.id, r.kind, r.episode_id, r.movie_id, r.show_id, r.minutes, r.is_rewatch, r.watched_at, r.undated ?? 0);
+  }
+}
+
 export function setEpisodeWatched(episodeId, watched, { at = null, ifUnwatched = false } = {}) {
   const ep = db.prepare(`
     SELECT e.*, s.episode_runtime FROM episodes e
@@ -60,6 +102,12 @@ export function setEpisodeWatched(episodeId, watched, { at = null, ifUnwatched =
       changed = false;
       return;
     }
+    // A re-tick moments after an untick is an undo, not a new viewing.
+    const undo = watched && !at ? recentUnmark(existing) : null;
+    if (undo) {
+      restore('episode_state', 'episode_id', ep.id, undo);
+      return;
+    }
     if (existing) {
       db.prepare(
         `UPDATE episode_state SET watched = ?, watched_at = CASE WHEN ? THEN ? ELSE watched_at END,
@@ -79,11 +127,10 @@ export function setEpisodeWatched(episodeId, watched, { at = null, ifUnwatched =
         kind: 'episode', episodeId: ep.id, showId: ep.show_id,
         minutes, isRewatch: Boolean(existing?.play_count), at: when,
       });
+      db.prepare('UPDATE episode_state SET undo = NULL WHERE episode_id = ?').run(ep.id);
     } else {
       // Un-marking removes the most recent log entry for that episode.
-      db.prepare(
-        'DELETE FROM watch_history WHERE id = (SELECT id FROM watch_history WHERE episode_id = ? ORDER BY watched_at DESC LIMIT 1)'
-      ).run(ep.id);
+      unmark('episode_state', 'episode_id', 'episode_id', ep.id, existing.watched_at);
     }
   });
   return { ok: true, watched, minutes, changed, show_id: ep.show_id };
@@ -107,6 +154,11 @@ export function setMovieWatched(movieId, watched, { at = null, ifUnwatched = fal
       changed = false;
       return;
     }
+    const undo = watched && !at ? recentUnmark(existing) : null;
+    if (undo) {
+      restore('movie_state', 'movie_id', movie.id, undo);
+      return;
+    }
     if (existing) {
       db.prepare(
         `UPDATE movie_state SET watched = ?, watched_at = CASE WHEN ? THEN ? ELSE watched_at END,
@@ -125,10 +177,9 @@ export function setMovieWatched(movieId, watched, { at = null, ifUnwatched = fal
         kind: 'movie', movieId: movie.id, minutes: movie.runtime || 110,
         isRewatch: Boolean(existing?.play_count), at: when,
       });
+      db.prepare('UPDATE movie_state SET undo = NULL WHERE movie_id = ?').run(movie.id);
     } else {
-      db.prepare(
-        'DELETE FROM watch_history WHERE id = (SELECT id FROM watch_history WHERE movie_id = ? ORDER BY watched_at DESC LIMIT 1)'
-      ).run(movie.id);
+      unmark('movie_state', 'movie_id', 'movie_id', movie.id, existing.watched_at);
     }
   });
   return { ok: true, watched, changed };
