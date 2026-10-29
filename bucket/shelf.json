@@ -1,13 +1,13 @@
 {
-    "version": "0.1.8",
+    "version": "0.1.9",
     "description": "Local-first tracker and organizer for the TV and film files on your computer. Offline, no account.",
     "homepage": "https://github.com/PasinduOshada/shelf",
     "license": "MIT",
     "notes": "Your library is kept in the Shelf folder under %APPDATA%, and uninstalling leaves it in place. Update with: scoop update shelf",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/PasinduOshada/shelf/releases/download/v0.1.8/Shelf-0.1.8.exe#/Shelf.exe",
-            "hash": "c46f3d1fc7ee2230663c0b95f3d1a183139d242305192d72ede3750d1d21af80"
+            "url": "https://github.com/PasinduOshada/shelf/releases/download/v0.1.9/Shelf-0.1.9.exe#/Shelf.exe",
+            "hash": "4366be1d14e0372d56dbbafb0d660aacd98c94589a13a0d680140df8b2152275"
         }
     },
     "shortcuts": [
