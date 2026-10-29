@@ -440,6 +440,33 @@ test('unmarking twice does not erase an earlier viewing', async () => {
   db2.prepare("DELETE FROM shows WHERE id = 'twice'").run();
 });
 
+test('a re-tick right after an untick restores the original viewing', async () => {
+  // A misclick turned last year's viewing into "watched today", flagged as a
+  // rewatch and counted twice.
+  const watch = await import('../src/watch.js');
+  const db2 = (await import('../src/db.js')).db;
+  db2.prepare("INSERT INTO shows (id, title, sort_title) VALUES ('undo', 'Undo', 'undo')").run();
+  db2.prepare("INSERT INTO episodes (id, show_id, season_number, episode_number) VALUES ('undo-1', 'undo', 1, 1)").run();
+  const state = () => db2.prepare("SELECT watched, watched_at, play_count FROM episode_state WHERE episode_id = 'undo-1'").get();
+  const history = () => db2.prepare("SELECT watched_at, is_rewatch FROM watch_history WHERE episode_id = 'undo-1' ORDER BY watched_at").all().map((r) => ({ ...r }));
+
+  watch.setEpisodeWatched('undo-1', true, { at: '2025-06-01T20:00:00Z' });
+  watch.setEpisodeWatched('undo-1', false);
+  watch.setEpisodeWatched('undo-1', true);
+  assert.equal(state().watched_at, '2025-06-01 20:00:00');
+  assert.equal(state().play_count, 1, 'not counted twice');
+  assert.deepEqual(history(), [{ watched_at: '2025-06-01 20:00:00', is_rewatch: 0 }]);
+
+  // Long after the untick, ticking again is a real rewatch.
+  watch.setEpisodeWatched('undo-1', false);
+  db2.prepare("UPDATE episode_state SET undo = json_set(undo, '$.at', 0) WHERE episode_id = 'undo-1'").run();
+  watch.setEpisodeWatched('undo-1', true);
+  assert.equal(state().play_count, 2);
+  assert.equal(history().at(-1).is_rewatch, 1);
+
+  db2.prepare("DELETE FROM shows WHERE id = 'undo'").run();
+});
+
 test('restoring a backup never switches automatic organizing on', async () => {
   // A restore onto a fresh install brought the old computer's auto-organize
   // across enabled, watched folders and all -- files would start moving here
