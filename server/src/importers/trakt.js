@@ -195,7 +195,7 @@ export function mapPull(watchedShows, watchedMovies) {
 /** Local watches since the last push, in Trakt's /sync/history shape. */
 export function mapPush(since) {
   const rows = db.prepare(`
-    SELECT h.kind, h.watched_at, e.season_number, e.episode_number,
+    SELECT h.kind, h.watched_at, h.undated, e.season_number, e.episode_number,
            s.tmdb_id AS show_tmdb, s.episode_group_id, m.tmdb_id AS movie_tmdb
     FROM watch_history h
     LEFT JOIN episodes e ON e.id = h.episode_id
@@ -208,7 +208,10 @@ export function mapPush(since) {
   const movies = [];
   const shows = new Map();
   for (const r of rows) {
-    const at = `${r.watched_at.replace(' ', 'T')}.000Z`;
+    // "I've seen the whole series" has no real date. Sending the moment it was
+    // ticked filled Trakt's history with years of viewing on one afternoon;
+    // "released" is Trakt's own way of saying "watched, date unknown".
+    const at = r.undated ? 'released' : `${r.watched_at.replace(' ', 'T')}.000Z`;
     if (r.kind === 'movie' && r.movie_tmdb) {
       movies.push({ ids: { tmdb: r.movie_tmdb }, watched_at: at });
     } else if (r.kind === 'episode' && r.show_tmdb && !r.episode_group_id) {

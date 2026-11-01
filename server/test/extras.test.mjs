@@ -216,6 +216,15 @@ test('Trakt: pull maps by TMDB id and skips custom orderings; push shapes histor
   assert.ok(sev.seasons[0].episodes.some((e) => e.number === 1 && e.watched_at === '2024-03-01T20:00:00.000Z'));
   assert.ok(!push.shows.some((x) => x.ids.tmdb === 71446));
 
+  // A bulk "seen it all" mark has no real date; Trakt is told so, rather than
+  // being handed the afternoon it was ticked.
+  db.prepare(
+    "INSERT INTO watch_history (id, kind, movie_id, minutes, watched_at, undated) VALUES ('trakt-undated', 'movie', 'M1', 90, '2024-05-05 10:00:00', 1)"
+  ).run();
+  const later = m.trakt.mapPush('2024-05-01');
+  assert.ok(later.movies.some((x) => x.ids.tmdb === 949 && x.watched_at === 'released'));
+  db.prepare("DELETE FROM watch_history WHERE id = 'trakt-undated'").run();
+
   assert.throws(() => m.trakt.setTraktApp({ clientId: 'short', clientSecret: 'x' }), /64 characters/);
 });
 
