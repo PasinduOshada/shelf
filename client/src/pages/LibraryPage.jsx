@@ -55,7 +55,8 @@ function Hero({ item, onWatched, busy }) {
       <div className="relative grid items-end gap-10 gutter-x pb-9 pt-20 lg:grid-cols-[minmax(0,1fr)_196px]">
         <div className="min-w-0">
           <div className="mono mb-2.5 text-[10px] uppercase tracking-[0.22em] text-accent">
-            Continue watching
+            {/* With nothing in progress this is a series not yet begun. */}
+            {item.started ? 'Continue watching' : 'Start watching'}
           </div>
           <h1 className="display max-w-2xl text-[clamp(34px,5vw,64px)] uppercase leading-[0.9] text-ink">
             {item.title}
